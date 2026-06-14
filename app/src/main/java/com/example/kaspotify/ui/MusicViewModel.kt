@@ -10,6 +10,9 @@ import com.example.kaspotify.data.repository.MusicRepository
 import com.example.kaspotify.playback.EqualizerController
 import com.example.kaspotify.playback.PlayerController
 import com.example.kaspotify.playback.RepeatMode
+import com.example.kaspotify.playback.ReverbController
+import com.example.kaspotify.playback.ReverbPreset
+import com.example.kaspotify.playback.VisualizerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +28,9 @@ import javax.inject.Inject
 class MusicViewModel @Inject constructor(
     private val repository: MusicRepository,
     val player: PlayerController,
-    val equalizer: EqualizerController
+    val equalizer: EqualizerController,
+    val visualizer: VisualizerController,
+    val reverb: ReverbController
 ) : ViewModel() {
 
     fun songsForAlbum(albumId: Long): List<Song> =
@@ -39,6 +44,8 @@ class MusicViewModel @Inject constructor(
     val artists: StateFlow<List<Artist>> = repository.artists.asState(emptyList())
     val favorites: StateFlow<List<Song>> = repository.favorites.asState(emptyList())
     val recentlyPlayed: StateFlow<List<Song>> = repository.recentlyPlayed.asState(emptyList())
+    val mostPlayed: StateFlow<List<Song>> = repository.mostPlayed.asState(emptyList())
+    val recentlyAdded: StateFlow<List<Song>> = repository.recentlyAdded.asState(emptyList())
     val playlists: StateFlow<List<Playlist>> = repository.playlists.asState(emptyList())
 
     private val _searchQuery = MutableStateFlow("")
@@ -53,6 +60,9 @@ class MusicViewModel @Inject constructor(
     val shuffle: StateFlow<Boolean> get() = player.shuffle
     val repeatMode: StateFlow<RepeatMode> get() = player.repeatMode
     val sleepTimerMinutes: StateFlow<Int?> get() = player.sleepTimerMinutes
+    val playbackSpeed: StateFlow<Float> get() = player.playbackSpeed
+    val queue: StateFlow<List<Song>> get() = player.queue
+    val queueIndex: StateFlow<Int> get() = player.queueIndex
 
     init {
         // Count a play whenever a new track starts.
@@ -91,6 +101,27 @@ class MusicViewModel @Inject constructor(
     fun playNext(song: Song) = player.playNext(song)
     fun addToQueue(song: Song) = player.addToQueueEnd(song)
     fun setSleepTimer(minutes: Int?) = player.setSleepTimer(minutes)
+    fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)
+    fun removeQueueItem(index: Int) = player.removeQueueItem(index)
+    fun setPlaybackSpeed(speed: Float) = player.setPlaybackSpeed(speed)
+
+    // ---- Visualizer / Reverb ----
+
+    fun setVisualizerEnabled(enabled: Boolean) = visualizer.setEnabled(enabled)
+    fun setReverbEnabled(enabled: Boolean) = reverb.setEnabled(enabled)
+    fun setReverbPreset(preset: ReverbPreset) = reverb.setPreset(preset)
+
+    /** One-tap "Slowed + Reverb" mode: ~0.85x speed with a large hall reverb. */
+    fun setSlowedReverbEnabled(enabled: Boolean) {
+        if (enabled) {
+            player.setPlaybackSpeed(0.85f)
+            reverb.setPreset(ReverbPreset.LARGE_HALL)
+            reverb.setEnabled(true)
+        } else {
+            player.setPlaybackSpeed(1f)
+            reverb.setEnabled(false)
+        }
+    }
 
     fun toggleFavorite(song: Song) = viewModelScope.launch { repository.toggleFavorite(song) }
 

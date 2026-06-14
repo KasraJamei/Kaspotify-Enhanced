@@ -88,6 +88,8 @@ fun PlaylistDetailScreen(
                             onClick = { viewModel.playSong(song, songs) },
                             onToggleFavorite = { viewModel.toggleFavorite(song) },
                             onMore = { onMore(song) },
+                            onPlayNext = { viewModel.playNext(song) },
+                            onAddToQueue = { viewModel.addToQueue(song) },
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { viewModel.removeFromPlaylist(playlistId, song) }) {

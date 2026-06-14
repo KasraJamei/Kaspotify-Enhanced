@@ -15,6 +15,8 @@ import javax.inject.Inject
 class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var equalizerController: EqualizerController
+    @Inject lateinit var visualizerController: VisualizerController
+    @Inject lateinit var reverbController: ReverbController
 
     private var mediaSession: MediaSession? = null
 
@@ -36,6 +38,8 @@ class PlaybackService : MediaSessionService() {
         val audioSessionId = audioManager.generateAudioSessionId()
         player.setAudioSessionId(audioSessionId)
         equalizerController.attach(audioSessionId)
+        visualizerController.attach(audioSessionId)
+        reverbController.attach(audioSessionId)
 
         mediaSession = MediaSession.Builder(this, player).build()
     }
@@ -52,6 +56,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         equalizerController.release()
+        visualizerController.release()
+        reverbController.release()
         mediaSession?.run {
             player.release()
             release()

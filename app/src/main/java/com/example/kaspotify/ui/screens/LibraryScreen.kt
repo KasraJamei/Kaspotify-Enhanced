@@ -9,15 +9,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,12 +47,51 @@ import com.example.kaspotify.ui.components.SongRow
 
 private val tabs = listOf("Songs", "Albums", "Artists", "Favorites")
 
+enum class SmartPlaylistType(val title: String, val icon: ImageVector) {
+    RECENTLY_ADDED("Recently Added", Icons.Filled.History),
+    MOST_PLAYED("Most Played", Icons.Filled.Whatshot)
+}
+
+@Composable
+private fun SmartPlaylistRow(onOpen: (SmartPlaylistType) -> Unit) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        items(SmartPlaylistType.entries.toList(), key = { it.name }) { type ->
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .clickable { onOpen(type) }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        type.icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(type.title, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun LibraryScreen(
     viewModel: MusicViewModel,
     onMore: (Song) -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenArtist: (String) -> Unit,
+    onOpenSmartPlaylist: (SmartPlaylistType) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -71,6 +117,8 @@ fun LibraryScreen(
                 Text("Shuffle")
             }
         }
+
+        SmartPlaylistRow(onOpenSmartPlaylist)
 
         ScrollableTabRow(
             selectedTabIndex = selectedTab,
@@ -114,7 +162,9 @@ private fun SongList(
                 isCurrent = song.id == currentId,
                 onClick = { viewModel.playSong(song, songs) },
                 onToggleFavorite = { viewModel.toggleFavorite(song) },
-                onMore = { onMore(song) }
+                onMore = { onMore(song) },
+                onPlayNext = { viewModel.playNext(song) },
+                onAddToQueue = { viewModel.addToQueue(song) }
             )
         }
     }

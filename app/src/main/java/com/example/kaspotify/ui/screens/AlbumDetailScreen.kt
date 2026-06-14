@@ -113,7 +113,9 @@ fun AlbumDetailScreen(
                     isCurrent = song.id == currentId,
                     onClick = { viewModel.playSong(song, albumSongs) },
                     onToggleFavorite = { viewModel.toggleFavorite(song) },
-                    onMore = { onMore(song) }
+                    onMore = { onMore(song) },
+                    onPlayNext = { viewModel.playNext(song) },
+                    onAddToQueue = { viewModel.addToQueue(song) }
                 )
             }
         }

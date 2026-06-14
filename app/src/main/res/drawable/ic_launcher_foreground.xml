@@ -3,12 +3,14 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:scaleX="2.2"
-        android:scaleY="2.2"
-        android:translateX="28.8"
-        android:translateY="28.8">
-        <path
-            android:fillColor="#1DB954"
-            android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" />
-    </group>
+    <!-- Geometric "K" monogram: a vertical stroke plus two angular chevrons. -->
+    <path
+        android:fillColor="#1ED760"
+        android:pathData="M22.5,18 L40.5,18 L40.5,90 L22.5,90 Z" />
+    <path
+        android:fillColor="#00C2FF"
+        android:pathData="M40.5,40.5 L90,13.5 L90,31.5 L40.5,58.5 Z" />
+    <path
+        android:fillColor="#1DB954"
+        android:pathData="M40.5,49.5 L90,76.5 L90,94.5 L40.5,67.5 Z" />
 </vector>

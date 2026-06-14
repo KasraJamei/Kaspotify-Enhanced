@@ -18,14 +18,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaspotify.ui.AppScaffold
 import com.example.kaspotify.ui.MusicViewModel
 import com.example.kaspotify.ui.theme.KaspotifyTheme
+import com.example.kaspotify.ui.theme.rememberArtworkAccentColor
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -38,12 +41,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            KaspotifyTheme {
+            val viewModel: MusicViewModel = hiltViewModel()
+            val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
+            val accentColor by rememberArtworkAccentColor(currentSong?.artworkUri)
+            KaspotifyTheme(accentColor = accentColor) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val viewModel: MusicViewModel = hiltViewModel()
                     PermissionGate(viewModel)
                 }
             }

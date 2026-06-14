@@ -47,6 +47,9 @@ class MusicRepository @Inject constructor(
     val mostPlayed: Flow<List<Song>> =
         combine(songs, dao.mostPlayedIds()) { list, ids -> orderByIds(list, ids) }
 
+    val recentlyAdded: Flow<List<Song>> =
+        songs.map { list -> list.sortedByDescending { it.dateAddedSec }.take(MAX_SMART_PLAYLIST_SIZE) }
+
     val playlists: Flow<List<Playlist>> =
         dao.playlistsWithCounts().map { rows ->
             rows.map { Playlist(id = it.id, name = it.name, songCount = it.songCount) }
@@ -115,5 +118,9 @@ class MusicRepository @Inject constructor(
     private fun orderByIds(songs: List<Song>, ids: List<Long>): List<Song> {
         val byId = songs.associateBy { it.id }
         return ids.mapNotNull { byId[it] }
+    }
+
+    companion object {
+        private const val MAX_SMART_PLAYLIST_SIZE = 100
     }
 }

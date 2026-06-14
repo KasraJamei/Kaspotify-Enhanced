@@ -2,6 +2,7 @@ package com.example.kaspotify.data.media
 
 import android.content.ContentUris
 import android.content.Context
+import android.os.Build
 import android.provider.MediaStore
 import com.example.kaspotify.data.model.Album
 import com.example.kaspotify.data.model.Artist
@@ -21,17 +22,22 @@ class MediaStoreImporter @Inject constructor(
     /** Scan device audio for actual music tracks (skips ringtones / very short clips). */
     suspend fun scan(): List<Song> = withContext(Dispatchers.IO) {
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.TRACK,
-            MediaStore.Audio.Media.YEAR,
-            MediaStore.Audio.Media.DATE_ADDED
-        )
+        val projection = buildList {
+            add(MediaStore.Audio.Media._ID)
+            add(MediaStore.Audio.Media.TITLE)
+            add(MediaStore.Audio.Media.ARTIST)
+            add(MediaStore.Audio.Media.ALBUM)
+            add(MediaStore.Audio.Media.ALBUM_ID)
+            add(MediaStore.Audio.Media.DURATION)
+            add(MediaStore.Audio.Media.TRACK)
+            add(MediaStore.Audio.Media.YEAR)
+            add(MediaStore.Audio.Media.DATE_ADDED)
+            add(MediaStore.Audio.Media.MIME_TYPE)
+            add(MediaStore.Audio.Media.DATA)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                add(MediaStore.Audio.Media.BITRATE)
+            }
+        }.toTypedArray()
         // Music only, and at least 5 seconds long.
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
             "${MediaStore.Audio.Media.DURATION} >= ?"
@@ -50,6 +56,11 @@ class MediaStoreImporter @Inject constructor(
                 val trackCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 val yearCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+                val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val bitrateCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    cursor.getColumnIndex(MediaStore.Audio.Media.BITRATE)
+                } else -1
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
@@ -65,7 +76,12 @@ class MediaStoreImporter @Inject constructor(
                         uri = uri,
                         track = cursor.getInt(trackCol),
                         year = cursor.getInt(yearCol),
-                        dateAddedSec = cursor.getLong(dateCol)
+                        dateAddedSec = cursor.getLong(dateCol),
+                        mimeType = cursor.getString(mimeCol) ?: "",
+                        bitrateBps = if (bitrateCol >= 0) {
+                            cursor.getInt(bitrateCol).takeIf { it > 0 }
+                        } else null,
+                        filePath = cursor.getString(dataCol) ?: ""
                     )
                 }
             }

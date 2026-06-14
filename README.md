@@ -11,17 +11,32 @@ background playback, Room for local state, and Hilt for dependency injection.
 ## Features
 
 - **Offline importer** — scans device audio via `MediaStore` (music only, skips
-  ringtones and clips under 5s) and derives albums & artists.
+  ringtones and clips under 5s) and derives albums & artists, including bitrate/
+  format metadata for quality badges (Lossless, 320 kbps, AAC, …).
 - **Background playback** — a Media3 `MediaSessionService` with lock-screen /
   notification controls, audio focus, and auto-pause when headphones unplug.
-- **Library** — tabs for Songs / Albums / Artists / Favorites, plus *shuffle all*.
+- **Library** — tabs for Songs / Albums / Artists / Favorites, plus *shuffle all*
+  and **smart playlists** (Recently Added, Most Played).
 - **Search** across title, artist, and album.
 - **Playlists** — create, open, add a song from its ⋮ menu, remove.
 - **Favorites, play counts, recently played** — persisted in Room.
-- **Now Playing** — large artwork, scrubbable seek bar, shuffle, repeat
-  (off/all/one), favorite toggle, and a sleep timer (15/30/45/60 min).
-- **Mini-player** docked above the bottom navigation with a live progress bar.
+- **Now Playing** — large artwork with a spring entrance animation, animated
+  accent-color background gradient derived from the album art (via Palette),
+  scrubbable seek bar, shuffle, repeat (off/all/one), favorite toggle (incl.
+  double-tap-to-favorite with a heart pop), and a sleep timer (15/30/45/60 min).
+- **Audio visualizer** — real-time waveform bars on the Now Playing screen
+  (requires the `RECORD_AUDIO` permission, requested on demand).
+- **Equalizer** — 5-band EQ with presets.
+- **Effects** — Slow + Reverb mode (adjustable 0.5x–1.25x playback speed plus
+  `PresetReverb` rooms/halls/plate), including a one-tap "Slowed + Reverb" toggle.
+- **Queue screen** — view the up-next queue, drag to reorder, swipe to remove.
+- **Gestures** — swipe a song row right to add to queue, left to play next.
+- **Dynamic theming** — the app's accent color animates to match the currently
+  playing album's artwork.
+- **Mini-player** docked above the bottom navigation with animated artwork/title
+  crossfades, an animated play/pause icon, and a live progress bar.
 - **Queue** — play next / add to queue.
+- Unique geometric "K" monogram adaptive app icon.
 
 ## Architecture
 
@@ -29,15 +44,19 @@ background playback, Room for local state, and Hilt for dependency injection.
 data/
   model/        Plain data classes: Song, Album, Artist, Playlist
   local/        Room entities, DAO, database (favorites, play counts, recents, playlists)
-  media/        MediaStoreImporter — reads device audio
+  media/        MediaStoreImporter — reads device audio (incl. mime/bitrate/path)
   repository/   MusicRepository — combines importer + Room into reactive Flows
 playback/
-  PlaybackService   Media3 MediaSessionService (ExoPlayer + audio focus)
-  PlayerController   @Singleton the UI talks to (current song, isPlaying, position, …)
+  PlaybackService       Media3 MediaSessionService (ExoPlayer + audio focus)
+  PlayerController       @Singleton the UI talks to (current song, isPlaying, position, queue, …)
+  EqualizerController     5-band EQ bound to the ExoPlayer audio session
+  VisualizerController    Waveform capture for the audio visualizer
+  ReverbController         PresetReverb for the Slow + Reverb effects mode
 ui/
-  theme/        Dark Material 3 theme (Spotify-ish green)
-  components/   Artwork, SongRow, MiniPlayer
-  screens/      Library, Search, Playlists, PlaylistDetail, NowPlaying
+  theme/        Dark Material 3 theme (Spotify-ish green) + Palette-based dynamic accent color
+  components/   Artwork, SongRow, MiniPlayer, QualityBadge, VisualizerView
+  screens/      Library, Search, Playlists, PlaylistDetail, SmartPlaylist, NowPlaying,
+                 Equalizer, Effects, Queue
   MusicViewModel, AppScaffold (bottom nav + overlays)
 di/             Hilt modules
 ```
@@ -99,3 +118,5 @@ library re-scans on next launch.
 | `READ_EXTERNAL_STORAGE` (maxSdk 32) | Android 12 and below |
 | `POST_NOTIFICATIONS` | Android 13+, for the playback notification |
 | `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | background playback |
+| `RECORD_AUDIO` | requested on demand when enabling the audio visualizer |
+| `MODIFY_AUDIO_SETTINGS` | for the equalizer and slow+reverb effects |

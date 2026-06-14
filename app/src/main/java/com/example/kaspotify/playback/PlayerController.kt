@@ -6,7 +6,9 @@ import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.kaspotify.data.model.Song
@@ -48,6 +50,15 @@ class PlayerController @Inject constructor(
     private val _sleepTimerMinutes = MutableStateFlow<Int?>(null)
     val sleepTimerMinutes: StateFlow<Int?> = _sleepTimerMinutes.asStateFlow()
 
+    private val _playbackSpeed = MutableStateFlow(1f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    private val _queue = MutableStateFlow<List<Song>>(emptyList())
+    val queue: StateFlow<List<Song>> = _queue.asStateFlow()
+
+    private val _queueIndex = MutableStateFlow(0)
+    val queueIndex: StateFlow<Int> = _queueIndex.asStateFlow()
+
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
 
@@ -80,6 +91,7 @@ class PlayerController @Inject constructor(
             syncCurrentSong()
             _durationMs.value = (controller?.duration ?: 0L).coerceAtLeast(0L)
             _positionMs.value = 0L
+            _queueIndex.value = controller?.currentMediaItemIndex ?: 0
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -88,6 +100,10 @@ class PlayerController @Inject constructor(
 
         override fun onRepeatModeChanged(repeatMode: Int) {
             _repeatMode.value = repeatMode.toRepeatMode()
+        }
+
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            syncQueue()
         }
     }
 
@@ -103,7 +119,9 @@ class PlayerController @Inject constructor(
                 _shuffle.value = c.shuffleModeEnabled
                 _repeatMode.value = c.repeatMode.toRepeatMode()
                 _isPlaying.value = c.isPlaying
+                _playbackSpeed.value = c.playbackParameters.speed
                 syncCurrentSong()
+                syncQueue()
             }
         }, MoreExecutors.directExecutor())
     }
@@ -123,6 +141,7 @@ class PlayerController @Inject constructor(
         c.setMediaItems(songs.map { it.toMediaItem() }, startIndex.coerceIn(0, songs.lastIndex), 0L)
         c.prepare()
         c.play()
+        syncQueue()
     }
 
     fun togglePlayPause() {
@@ -169,6 +188,7 @@ class PlayerController @Inject constructor(
             c.prepare()
             c.play()
         }
+        syncQueue()
     }
 
     fun addToQueueEnd(song: Song) {
@@ -179,6 +199,30 @@ class PlayerController @Inject constructor(
             c.prepare()
             c.play()
         }
+        syncQueue()
+    }
+
+    /** Move a queue item from [from] to [to] (both indices into [queue]). */
+    fun moveQueueItem(from: Int, to: Int) {
+        val c = controller ?: return
+        if (from == to) return
+        c.moveMediaItem(from, to)
+        syncQueue()
+    }
+
+    /** Remove the queue item at [index]. */
+    fun removeQueueItem(index: Int) {
+        val c = controller ?: return
+        c.removeMediaItem(index)
+        syncQueue()
+    }
+
+    /** Sets playback speed (and matching pitch) in the 0.5x-1.25x range. 1f = normal. */
+    fun setPlaybackSpeed(speed: Float) {
+        val c = controller ?: return
+        val clamped = speed.coerceIn(0.5f, 1.25f)
+        c.playbackParameters = PlaybackParameters(clamped, clamped)
+        _playbackSpeed.value = clamped
     }
 
     /** [minutes] null cancels any running timer. */
@@ -201,6 +245,14 @@ class PlayerController @Inject constructor(
         val c = controller ?: return
         val mediaId = c.currentMediaItem?.mediaId?.toLongOrNull()
         _currentSong.value = mediaId?.let { registry[it] }
+    }
+
+    private fun syncQueue() {
+        val c = controller ?: return
+        _queue.value = (0 until c.mediaItemCount).mapNotNull { i ->
+            c.getMediaItemAt(i).mediaId.toLongOrNull()?.let { registry[it] }
+        }
+        _queueIndex.value = c.currentMediaItemIndex
     }
 
     private fun Song.toMediaItem(): MediaItem {

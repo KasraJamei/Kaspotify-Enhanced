@@ -99,7 +99,9 @@ fun ArtistDetailScreen(
                     isCurrent = song.id == currentId,
                     onClick = { viewModel.playSong(song, artistSongs) },
                     onToggleFavorite = { viewModel.toggleFavorite(song) },
-                    onMore = { onMore(song) }
+                    onMore = { onMore(song) },
+                    onPlayNext = { viewModel.playNext(song) },
+                    onAddToQueue = { viewModel.addToQueue(song) }
                 )
             }
         }

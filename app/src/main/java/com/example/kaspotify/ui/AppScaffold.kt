@@ -2,6 +2,11 @@ package com.example.kaspotify.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
@@ -42,12 +47,16 @@ import com.example.kaspotify.data.model.Song
 import com.example.kaspotify.ui.components.MiniPlayer
 import com.example.kaspotify.ui.screens.AlbumDetailScreen
 import com.example.kaspotify.ui.screens.ArtistDetailScreen
+import com.example.kaspotify.ui.screens.EffectsScreen
 import com.example.kaspotify.ui.screens.EqualizerScreen
 import com.example.kaspotify.ui.screens.LibraryScreen
 import com.example.kaspotify.ui.screens.NowPlayingScreen
 import com.example.kaspotify.ui.screens.PlaylistDetailScreen
 import com.example.kaspotify.ui.screens.PlaylistsScreen
+import com.example.kaspotify.ui.screens.QueueScreen
 import com.example.kaspotify.ui.screens.SearchScreen
+import com.example.kaspotify.ui.screens.SmartPlaylistScreen
+import com.example.kaspotify.ui.screens.SmartPlaylistType
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     LIBRARY("Library", Icons.Filled.Home),
@@ -61,8 +70,11 @@ fun AppScaffold(viewModel: MusicViewModel) {
     var openedPlaylistId by remember { mutableStateOf<Long?>(null) }
     var openedAlbumId by remember { mutableStateOf<Long?>(null) }
     var openedArtistName by remember { mutableStateOf<String?>(null) }
+    var openedSmartPlaylist by remember { mutableStateOf<SmartPlaylistType?>(null) }
     var showNowPlaying by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
+    var showEffects by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(false) }
     var moreSong by remember { mutableStateOf<Song?>(null) }
 
     val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
@@ -104,6 +116,7 @@ fun AppScaffold(viewModel: MusicViewModel) {
                     Tab.LIBRARY -> {
                         val albumId = openedAlbumId
                         val artistName = openedArtistName
+                        val smartPlaylist = openedSmartPlaylist
                         when {
                             albumId != null -> AlbumDetailScreen(
                                 albumId = albumId,
@@ -117,11 +130,26 @@ fun AppScaffold(viewModel: MusicViewModel) {
                                 onBack = { openedArtistName = null },
                                 onMore = onMore
                             )
+                            smartPlaylist != null -> {
+                                val recentlyAdded by viewModel.recentlyAdded.collectAsStateWithLifecycle()
+                                val mostPlayed by viewModel.mostPlayed.collectAsStateWithLifecycle()
+                                SmartPlaylistScreen(
+                                    title = smartPlaylist.title,
+                                    songs = when (smartPlaylist) {
+                                        SmartPlaylistType.RECENTLY_ADDED -> recentlyAdded
+                                        SmartPlaylistType.MOST_PLAYED -> mostPlayed
+                                    },
+                                    viewModel = viewModel,
+                                    onBack = { openedSmartPlaylist = null },
+                                    onMore = onMore
+                                )
+                            }
                             else -> LibraryScreen(
                                 viewModel = viewModel,
                                 onMore = onMore,
                                 onOpenAlbum = { openedAlbumId = it },
-                                onOpenArtist = { openedArtistName = it }
+                                onOpenArtist = { openedArtistName = it },
+                                onOpenSmartPlaylist = { openedSmartPlaylist = it }
                             )
                         }
                     }
@@ -146,25 +174,59 @@ fun AppScaffold(viewModel: MusicViewModel) {
         // Full Now Playing overlay slides up over everything.
         AnimatedVisibility(
             visible = showNowPlaying && currentSong != null,
-            enter = slideInVertically(initialOffsetY = { it }),
-            exit = slideOutVertically(targetOffsetY = { it })
+            enter = slideInVertically(
+                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                initialOffsetY = { it }
+            ) + fadeIn(tween(200)),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150))
         ) {
             BackHandler(enabled = showNowPlaying) { showNowPlaying = false }
             NowPlayingScreen(
                 viewModel = viewModel,
                 onCollapse = { showNowPlaying = false },
-                onOpenEqualizer = { showEqualizer = true }
+                onOpenEqualizer = { showEqualizer = true },
+                onOpenEffects = { showEffects = true },
+                onOpenQueue = { showQueue = true }
             )
         }
 
         // Equalizer overlay on top of Now Playing.
         AnimatedVisibility(
             visible = showEqualizer,
-            enter = slideInVertically(initialOffsetY = { it }),
-            exit = slideOutVertically(targetOffsetY = { it })
+            enter = slideInVertically(
+                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                initialOffsetY = { it }
+            ) + fadeIn(tween(200)),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150))
         ) {
             BackHandler(enabled = showEqualizer) { showEqualizer = false }
             EqualizerScreen(viewModel = viewModel, onCollapse = { showEqualizer = false })
+        }
+
+        // Effects (slow + reverb) overlay on top of Now Playing.
+        AnimatedVisibility(
+            visible = showEffects,
+            enter = slideInVertically(
+                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                initialOffsetY = { it }
+            ) + fadeIn(tween(200)),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150))
+        ) {
+            BackHandler(enabled = showEffects) { showEffects = false }
+            EffectsScreen(viewModel = viewModel, onCollapse = { showEffects = false })
+        }
+
+        // Queue overlay on top of Now Playing.
+        AnimatedVisibility(
+            visible = showQueue,
+            enter = slideInVertically(
+                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                initialOffsetY = { it }
+            ) + fadeIn(tween(200)),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150))
+        ) {
+            BackHandler(enabled = showQueue) { showQueue = false }
+            QueueScreen(viewModel = viewModel, onCollapse = { showQueue = false })
         }
     }
 
