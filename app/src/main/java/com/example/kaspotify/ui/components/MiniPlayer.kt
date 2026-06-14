@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,7 +115,7 @@ fun MiniPlayer(
                 }
             }
             LinearProgressIndicator(
-                progress = animatedProgress,
+                progress = { animatedProgress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp)
