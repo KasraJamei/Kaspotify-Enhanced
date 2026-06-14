@@ -1,6 +1,6 @@
 # Kaspotify
 
-[![Build APK](https://github.com/kasrajamei/Kaspotify/actions/workflows/build.yml/badge.svg)](https://github.com/kasrajamei/Kaspotify/actions/workflows/build.yml)
+[![Build APK](https://github.com/KasraJamei/Kaspotify-Enhanced/actions/workflows/build.yml/badge.svg)](https://github.com/KasraJamei/Kaspotify-Enhanced/actions/workflows/build.yml)
 
 A Spotify-style player for music that's **already on your device** — an offline
 importer, not a streaming client. No accounts, no network calls, no streaming.
