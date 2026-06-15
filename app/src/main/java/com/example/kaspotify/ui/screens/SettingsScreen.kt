@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Swipe
 import androidx.compose.material3.Icon
@@ -125,6 +126,43 @@ fun SettingsScreen(
             checked = settings.inAppToasts,
             onChange = viewModel::setInAppToasts
         )
+
+        SectionLabel("Guide")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    viewModel.setOnboardingSeen(false)
+                    onBack()
+                }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(GlassFill)
+                    .border(1.dp, GlassStroke, RoundedCornerShape(percent = 50)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.Replay,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.size(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Show welcome guide again", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Replay the first-launch tour",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
 
         SectionLabel("About")
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {

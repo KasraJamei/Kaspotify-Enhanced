@@ -1,0 +1,180 @@
+package com.example.kaspotify.ui.screens
+
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+
+private data class OnboardPage(
+    val icon: ImageVector,
+    val title: String,
+    val body: String
+)
+
+private val pages = listOf(
+    OnboardPage(
+        Icons.Filled.LibraryMusic,
+        "Welcome to Kaspotify",
+        "Your on-device music, beautifully played — and it all works fully offline."
+    ),
+    OnboardPage(
+        Icons.Filled.AutoAwesome,
+        "Your whole library",
+        "Songs, albums, artists and favorites. Sort A–Z and jump with the side index. " +
+            "Quality badges show each track's bitrate."
+    ),
+    OnboardPage(
+        Icons.Filled.Favorite,
+        "Now Playing",
+        "Tap the mini-player to open it. Double-tap the artwork to like, scrub the timeline, " +
+            "set a sleep timer, and open the EQ or visualizer."
+    ),
+    OnboardPage(
+        Icons.Filled.Tune,
+        "Make it yours",
+        "Build playlists, share songs to other apps, and turn features on or off any time in Settings."
+    )
+)
+
+/**
+ * Full-screen first-launch guide: a small swipeable carousel introducing the app. Calls [onFinish]
+ * when the user taps Skip or finishes the last slide. Re-openable later from Settings.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun OnboardingScreen(onFinish: () -> Unit, modifier: Modifier = Modifier) {
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val scope = rememberCoroutineScope()
+    val isLast = pagerState.currentPage == pages.lastIndex
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        TextButton(
+            onClick = onFinish,
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+        ) {
+            Text("Skip", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.align(Alignment.Center)
+        ) { index ->
+            val page = pages[index]
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 36.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(96.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        page.icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
+                Spacer(Modifier.height(28.dp))
+                Text(
+                    page.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    page.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                pages.indices.forEach { i ->
+                    val selected = i == pagerState.currentPage
+                    val width by animateDpAsState(if (selected) 22.dp else 8.dp, label = "dot")
+                    Box(
+                        modifier = Modifier
+                            .size(width = width, height = 8.dp)
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = {
+                    if (isLast) onFinish()
+                    else scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (isLast) "Get started" else "Next")
+            }
+        }
+    }
+}

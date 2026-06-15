@@ -74,6 +74,7 @@ import com.example.kaspotify.ui.screens.EffectsScreen
 import com.example.kaspotify.ui.screens.EqualizerScreen
 import com.example.kaspotify.ui.screens.LibraryScreen
 import com.example.kaspotify.ui.screens.NowPlayingScreen
+import com.example.kaspotify.ui.screens.OnboardingScreen
 import com.example.kaspotify.ui.screens.PlaylistDetailScreen
 import com.example.kaspotify.ui.screens.PlaylistsScreen
 import com.example.kaspotify.ui.screens.QualityScreen
@@ -314,6 +315,15 @@ fun AppScaffold(viewModel: MusicViewModel) {
                 .padding(bottom = 12.dp)
         ) {
             GlassSnackbar(toastText)
+        }
+
+        // First-launch welcome guide sits above everything until dismissed.
+        AnimatedVisibility(
+            visible = !LocalAppSettings.current.onboardingSeen,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(250))
+        ) {
+            OnboardingScreen(onFinish = { viewModel.setOnboardingSeen(true) })
         }
     }
 
