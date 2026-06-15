@@ -23,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,7 +64,6 @@ import com.example.kaspotify.ui.theme.LocalAmbientColor
 private val tabs = listOf("Songs", "Albums", "Artists", "Favorites")
 
 enum class SmartPlaylistType(val title: String, val icon: ImageVector) {
-    PLAYLIST_OF_DAY("Playlist of the Day", Icons.Filled.Today),
     RECENTLY_ADDED("Recently Added", Icons.Filled.History),
     MOST_PLAYED("Most Played", Icons.Filled.Whatshot)
 }

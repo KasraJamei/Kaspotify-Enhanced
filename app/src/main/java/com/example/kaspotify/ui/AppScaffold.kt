@@ -259,18 +259,16 @@ fun AppScaffold(viewModel: MusicViewModel) {
             QueueScreen(viewModel = viewModel, onCollapse = { showQueue = false })
         }
 
-        // Smart-playlist list overlay (Playlist of the Day / Recently Added / Most Played).
+        // Smart-playlist list overlay (Recently Added / Most Played).
         AnimatedVisibility(visible = openedSmartPlaylist != null, enter = overlayEnter, exit = overlayExit) {
             BackHandler(enabled = openedSmartPlaylist != null) { openedSmartPlaylist = null }
             val type = openedSmartPlaylist
             if (type != null) {
-                val playlistOfTheDay by viewModel.playlistOfTheDay.collectAsStateWithLifecycle()
                 val recentlyAdded by viewModel.recentlyAdded.collectAsStateWithLifecycle()
                 val mostPlayed by viewModel.mostPlayed.collectAsStateWithLifecycle()
                 SmartPlaylistScreen(
                     title = type.title,
                     songs = when (type) {
-                        SmartPlaylistType.PLAYLIST_OF_DAY -> playlistOfTheDay
                         SmartPlaylistType.RECENTLY_ADDED -> recentlyAdded
                         SmartPlaylistType.MOST_PLAYED -> mostPlayed
                     },

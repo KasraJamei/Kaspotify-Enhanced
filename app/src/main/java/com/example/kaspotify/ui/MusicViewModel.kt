@@ -29,7 +29,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.random.Random
 
 @HiltViewModel
 class MusicViewModel @Inject constructor(
@@ -64,10 +63,6 @@ class MusicViewModel @Inject constructor(
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     val searchResults: StateFlow<List<Song>> = repository.search(_searchQuery).asState(emptyList())
     val recentSearches: StateFlow<List<String>> = repository.recentSearches.asState(emptyList())
-
-    /** A daily-rotating mix, deterministic per calendar day. */
-    val playlistOfTheDay: StateFlow<List<Song>> =
-        repository.songs.map { dailyPick(it) }.asState(emptyList())
 
     /** All songs grouped into quality tiers (best tier first) for the "By Quality" browser. */
     val songsByQuality: StateFlow<Map<QualityTier, List<Song>>> =
@@ -185,12 +180,6 @@ class MusicViewModel @Inject constructor(
             notify("Created \"$name\" with ${songs.size} songs")
         }
 
-    private fun dailyPick(all: List<Song>): List<Song> {
-        if (all.isEmpty()) return emptyList()
-        val epochDay = System.currentTimeMillis() / 86_400_000L
-        return all.shuffled(Random(epochDay)).take(DAILY_PLAYLIST_SIZE)
-    }
-
     // ---- Playlist actions ----
 
     fun createPlaylist(name: String) = viewModelScope.launch {
@@ -216,8 +205,4 @@ class MusicViewModel @Inject constructor(
 
     private fun <T> Flow<T>.asState(initial: T): StateFlow<T> =
         stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
-
-    private companion object {
-        const val DAILY_PLAYLIST_SIZE = 30
-    }
 }
