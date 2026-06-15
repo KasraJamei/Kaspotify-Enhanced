@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.kaspotify"
         minSdk = 24
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.5.3"
+        versionCode = 9
+        versionName = "1.5.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -22,16 +22,25 @@ android {
         }
     }
 
-    // Release signing is enabled only when a keystore + password are provided (e.g. by CI from
-    // repo secrets). Without them the release build is produced unsigned, and local/dev builds keep
-    // working with no setup required.
-    val releaseKeystore = file("release.keystore")
-    val canSignRelease = releaseKeystore.exists() && System.getenv("KEYSTORE_PASSWORD") != null
+    // A stable signing key is committed (kaspotify-signing.p12) so every build — including CI — is
+    // signed identically. That's what lets a freshly built APK install *over* a previously installed
+    // Kaspotify without "uninstall the old version first" (Android rejects signature mismatches).
+    // It is deliberately NOT a secret-grade key (its password is public, it's for sideload updates).
+    // For real Play Store signing, supply the KEYSTORE_* env/secrets and they take precedence.
+    val secretKeystore = file("release.keystore")
+    val useSecretKeystore = secretKeystore.exists() && System.getenv("KEYSTORE_PASSWORD") != null
 
     signingConfigs {
-        if (canSignRelease) {
+        create("stable") {
+            storeFile = file("kaspotify-signing.p12")
+            storePassword = "kaspotify"
+            keyAlias = "kaspotify"
+            keyPassword = "kaspotify"
+            storeType = "PKCS12"
+        }
+        if (useSecretKeystore) {
             create("release") {
-                storeFile = releaseKeystore
+                storeFile = secretKeystore
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
@@ -40,16 +49,21 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Share the stable key so local installs and CI builds carry one consistent signature.
+            signingConfig = signingConfigs.getByName("stable")
+        }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Minification stays OFF on purpose: a directly-installable build that is guaranteed to
+            // run (no R8/reflection surprises with Hilt/Room/Media3) matters more than APK size here.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (canSignRelease) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            signingConfig = if (useSecretKeystore) signingConfigs.getByName("release")
+            else signingConfigs.getByName("stable")
         }
     }
     lint {

@@ -108,9 +108,13 @@ On first launch the app shows a rationale screen and requests audio access
 (`READ_MEDIA_AUDIO` on Android 13+, `READ_EXTERNAL_STORAGE` below). Grant it and
 the library imports automatically.
 
-> The APKs attached to GitHub Releases are **debug-signed** — installable on any
-> device with "install unknown apps" enabled, but not signed with a release key
-> and therefore not Play-Store-ready as-is.
+> The APKs attached to GitHub Releases are signed with a **stable bundled update
+> key**, so each release installs over the previous one without uninstalling. It
+> is not a Play-Store release key (its password is public); to publish, configure
+> the `KEYSTORE_*` secrets and they take precedence automatically.
+>
+> Note: the very first build that switched to this key (v1.5.4) requires a
+> one-time uninstall of any older Kaspotify; updates after it install cleanly.
 
 ## Load test audio
 

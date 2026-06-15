@@ -29,10 +29,10 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # If signing secrets are present, build a properly signed *release* APK.
-      # Otherwise fall back to the debug APK (signed with the auto-generated debug
-      # key), which stays directly installable — so releases never regress while
-      # the keystore secrets aren't configured yet.
+      # Always build a *release* APK. It is signed with either the project's secret release key
+      # (if the KEYSTORE_* secrets are configured) or the committed stable key (kaspotify-signing.p12).
+      # Either way the signature is consistent across builds, so sideloaded updates install over each
+      # other without "uninstall the old version first".
       - name: Build APK
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -42,28 +42,22 @@ jobs:
         run: |
           mkdir -p dist
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
-            echo "Signing secrets found — building a signed release APK."
+            echo "Signing secrets found — building with the secret release key."
             echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
             ./gradlew assembleRelease --stacktrace
-            cp app/build/outputs/apk/release/app-release.apk "dist/Kaspotify-${GITHUB_REF_NAME}.apk"
             rm -f app/release.keystore
-            {
-              echo "**Kaspotify ${GITHUB_REF_NAME}**"
-              echo ""
-              echo "The attached APK is **signed with the project's release key** and directly installable."
-            } > dist/NOTES.md
+            SIGN_NOTE="The attached APK is **signed with the project's release key** and directly installable."
           else
-            echo "No signing secrets — building the installable debug APK."
-            ./gradlew assembleDebug --stacktrace
-            cp app/build/outputs/apk/debug/app-debug.apk "dist/Kaspotify-${GITHUB_REF_NAME}.apk"
-            {
-              echo "**Kaspotify ${GITHUB_REF_NAME}**"
-              echo ""
-              echo "The attached APK is **debug-signed** (installable on any device with \"install"
-              echo "unknown apps\" enabled). It is not signed with a release key, so it is not"
-              echo "Play-Store-ready as-is."
-            } > dist/NOTES.md
+            echo "No signing secrets — building with the committed stable update key."
+            ./gradlew assembleRelease --stacktrace
+            SIGN_NOTE="The attached APK is signed with Kaspotify's bundled **update key**, so it installs directly and updates over previous Kaspotify versions without uninstalling. (It is not a Play-Store release key.)"
           fi
+          cp app/build/outputs/apk/release/app-release.apk "dist/Kaspotify-${GITHUB_REF_NAME}.apk"
+          {
+            echo "**Kaspotify ${GITHUB_REF_NAME}**"
+            echo ""
+            echo "$SIGN_NOTE"
+          } > dist/NOTES.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

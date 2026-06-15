@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup rules (Android 11 and below). Backs up the Room database (playlists, favorites,
+  play/weekly counts, search history) and any shared prefs/files to the user's Google account, so
+  the data is restored when Kaspotify is reinstalled on a device with backup enabled.
+-->
+<full-backup-content>
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="." />
+</full-backup-content>
