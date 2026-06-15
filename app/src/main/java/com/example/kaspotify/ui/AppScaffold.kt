@@ -9,8 +9,11 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,13 +28,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlaylistAdd
@@ -55,8 +62,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -102,9 +111,13 @@ private val overlayExit = slideOutVertically(targetOffsetY = { it }) + fadeOut(t
 /** How long an action toast stays on screen before auto-dismissing. */
 private const val NOTIFICATION_MS = 1400L
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppScaffold(viewModel: MusicViewModel) {
-    var selectedTab by remember { mutableStateOf(Tab.LIBRARY) }
+    val tabsList = Tab.entries
+    val pagerState = rememberPagerState(initialPage = 0) { tabsList.size }
+    val scope = rememberCoroutineScope()
+    val selectedTab = tabsList[pagerState.currentPage]
     var openedPlaylistId by remember { mutableStateOf<Long?>(null) }
     var openedAlbumId by remember { mutableStateOf<Long?>(null) }
     var openedArtistName by remember { mutableStateOf<String?>(null) }
@@ -173,7 +186,10 @@ fun AppScaffold(viewModel: MusicViewModel) {
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Box(Modifier.widthIn(max = 640.dp)) {
-                            FloatingNavBar(selected = selectedTab, onSelect = { selectedTab = it })
+                            FloatingNavBar(
+                                selected = selectedTab,
+                                onSelect = { tab -> scope.launch { pagerState.animateScrollToPage(tab.ordinal) } }
+                            )
                         }
                     }
                 }
@@ -185,8 +201,18 @@ fun AppScaffold(viewModel: MusicViewModel) {
                     .fillMaxSize(),
                 contentAlignment = Alignment.TopCenter
             ) {
-                Box(modifier = Modifier.fillMaxSize().widthIn(max = 640.dp)) {
-                    when (selectedTab) {
+                // Swipe horizontally to move between Home / Search / Playlists. Swiping is disabled
+                // while an in-tab detail screen (album/artist/playlist) is open so it doesn't fight
+                // that screen's own gestures.
+                val detailOpen = (selectedTab == Tab.LIBRARY && (openedAlbumId != null || openedArtistName != null)) ||
+                    (selectedTab == Tab.PLAYLISTS && openedPlaylistId != null)
+                HorizontalPager(
+                    state = pagerState,
+                    userScrollEnabled = !detailOpen,
+                    modifier = Modifier.fillMaxSize().widthIn(max = 640.dp),
+                    key = { tabsList[it].name }
+                ) { page ->
+                    when (tabsList[page]) {
                         Tab.LIBRARY -> {
                             val albumId = openedAlbumId
                             val artistName = openedArtistName
@@ -307,12 +333,12 @@ fun AppScaffold(viewModel: MusicViewModel) {
         // full-screen Now Playing / Equalizer overlays are open.
         AnimatedVisibility(
             visible = toastVisible,
-            enter = fadeIn(tween(140)) + slideInVertically { it / 2 },
-            exit = fadeOut(tween(200)) + slideOutVertically { it / 2 },
+            enter = fadeIn(tween(140)) + slideInVertically { it / 2 } + scaleIn(initialScale = 0.85f, animationSpec = tween(200)),
+            exit = fadeOut(tween(200)) + slideOutVertically { it / 2 } + scaleOut(targetScale = 0.9f, animationSpec = tween(180)),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 12.dp)
+                .padding(bottom = 90.dp)
         ) {
             GlassSnackbar(toastText)
         }
@@ -355,22 +381,41 @@ private fun DockedMiniPlayer(viewModel: MusicViewModel, song: Song, onClick: () 
 
 @Composable
 private fun GlassSnackbar(message: String) {
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        modifier = Modifier
-            .padding(horizontal = 20.dp, vertical = 6.dp)
-            .fillMaxWidth()
-            .clip(shape)
-            .background(GlassFillStrong)
-            .border(1.dp, GlassStroke, shape)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+    val shape = RoundedCornerShape(16.dp)
+    // A small confirmation pill, centered and only as wide as its content so it reads as a
+    // distinct notification rather than a full-width bar. A primary-tinted check makes the
+    // "done" meaning obvious at a glance.
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f), shape)
+                .padding(start = 12.dp, end = 18.dp, top = 11.dp, bottom = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -50,8 +51,6 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -74,7 +73,9 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaspotify.playback.RepeatMode
 import com.example.kaspotify.ui.LocalAppSettings
@@ -89,8 +90,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import java.util.Locale
-
-private val sleepOptions = listOf<Int?>(null, 15, 30, 45, 60)
+import kotlin.math.roundToInt
 
 /** Tint for the broken-heart "unlike" burst. */
 private val DislikeRed = Color(0xFFFF5A5F)
@@ -211,12 +211,9 @@ fun NowPlayingScreen(
                     }
                     .pointerInput(current.id) {
                         detectTapGestures(
-                            // Double-tap only ever *likes* (Spotify-style), never accidentally unlikes.
-                            onDoubleTap = {
-                                if (!current.isFavorite) viewModel.toggleFavorite(current)
-                                heartIsLike = true
-                                heartTrigger++
-                            }
+                            // Double-tap toggles: like (heart pop) if not liked, or unlike
+                            // (broken-heart burst) if it already is.
+                            onDoubleTap = { toggleLike() }
                         )
                     }
             ) {
@@ -513,23 +510,65 @@ private fun SleepTimerChip(selected: Int?, onSelect: (Int?) -> Unit) {
             active = selected != null,
             onClick = { expanded = true }
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            sleepOptions.forEach { minutes ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = minutes?.let { "$it min" } ?: "Off",
-                            color = if (minutes == selected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onBackground
-                        )
-                    },
-                    onClick = {
-                        onSelect(minutes)
-                        expanded = false
-                    }
-                )
+        if (expanded) {
+            Popup(
+                alignment = Alignment.TopCenter,
+                offset = IntOffset(0, -360),
+                onDismissRequest = { expanded = false }
+            ) {
+                SleepTimerSlider(selected = selected, onSelect = onSelect)
             }
         }
+    }
+}
+
+/** A glass card with a slider you swipe to set the sleep timer (0 = off, up to 120 min in 5-min steps). */
+@Composable
+private fun SleepTimerSlider(selected: Int?, onSelect: (Int?) -> Unit) {
+    var sliderMin by remember { mutableStateOf((selected ?: 0).toFloat()) }
+    val minutes = (sliderMin / 5f).roundToInt() * 5
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        modifier = Modifier
+            .width(260.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.98f))
+            .border(1.dp, GlassStroke, shape)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "Sleep timer",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (minutes == 0) "Off" else "$minutes min",
+            style = MaterialTheme.typography.headlineSmall,
+            color = if (minutes == 0) MaterialTheme.colorScheme.onSurfaceVariant
+            else MaterialTheme.colorScheme.primary
+        )
+        Slider(
+            value = sliderMin,
+            onValueChange = {
+                sliderMin = it
+                val m = (it / 5f).roundToInt() * 5
+                onSelect(if (m == 0) null else m)
+            },
+            valueRange = 0f..120f,
+            steps = 23,
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = GlassStroke
+            )
+        )
+        Text(
+            "Swipe to set • tap outside to close",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

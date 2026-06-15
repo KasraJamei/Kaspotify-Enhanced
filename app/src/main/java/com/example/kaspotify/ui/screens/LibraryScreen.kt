@@ -1,10 +1,17 @@
 package com.example.kaspotify.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +29,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material3.DropdownMenu
@@ -40,6 +47,7 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,9 +57,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
@@ -68,9 +78,11 @@ import com.example.kaspotify.ui.MusicViewModel
 import com.example.kaspotify.ui.components.Artwork
 import com.example.kaspotify.ui.components.SongRow
 import com.example.kaspotify.ui.theme.GlassFill
+import com.example.kaspotify.ui.theme.GlassFillStrong
 import com.example.kaspotify.ui.theme.GlassStroke
 import com.example.kaspotify.ui.theme.LocalAmbientColor
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private val tabs = listOf("Songs", "Albums", "Artists", "Favorites")
 
@@ -166,8 +178,6 @@ fun LibraryScreen(
         ) {
             HomeWordmark()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ShuffleButton(enabled = songs.isNotEmpty()) { viewModel.shuffleAll(songs) }
-                Spacer(Modifier.width(4.dp))
                 IconButton(onClick = onOpenSettings) {
                     Icon(
                         Icons.Filled.Settings,
@@ -295,31 +305,6 @@ private fun SortPill(current: SortMode, onSelect: (SortMode) -> Unit) {
     }
 }
 
-@Composable
-private fun ShuffleButton(enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(percent = 50)
-    Row(
-        modifier = Modifier
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.primary)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            Icons.Filled.Shuffle,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            "Shuffle",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onPrimary
-        )
-    }
-}
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -407,7 +392,8 @@ private fun sectionLetter(title: String): Char {
 
 /**
  * A vertical #/A–Z fast-scroll rail pinned to the right edge. Tap or drag along it to jump the list
- * to the first song in that letter's section.
+ * to the first song in that letter's section. While dragging, the touched letter pops and a large
+ * preview bubble floats alongside the finger.
  */
 @Composable
 private fun AlphabetIndex(
@@ -416,45 +402,89 @@ private fun AlphabetIndex(
 ) {
     val letters = remember { listOf('#') + ('A'..'Z').toList() }
     var heightPx by remember { mutableIntStateOf(1) }
-    var lastLetter by remember { mutableStateOf<Char?>(null) }
+    var activeLetter by remember { mutableStateOf<Char?>(null) }
+    var shownLetter by remember { mutableStateOf('#') }
+    var touchY by remember { mutableFloatStateOf(0f) }
 
     fun pickAt(y: Float) {
+        touchY = y.coerceIn(0f, heightPx.toFloat())
         val idx = ((y / heightPx) * letters.size).toInt().coerceIn(0, letters.lastIndex)
         val letter = letters[idx]
-        if (letter != lastLetter) {
-            lastLetter = letter
+        if (letter != activeLetter) {
+            activeLetter = letter
+            shownLetter = letter
             onLetter(letter)
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .width(22.dp)
-            .clip(RoundedCornerShape(percent = 50))
-            .background(GlassFill)
-            .onSizeChanged { heightPx = it.height.coerceAtLeast(1) }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset -> pickAt(offset.y) },
-                    onDragEnd = { lastLetter = null },
-                    onVerticalDrag = { change, _ -> pickAt(change.position.y) }
+    Box(modifier = modifier.fillMaxHeight()) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(24.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(if (activeLetter != null) GlassFillStrong else GlassFill)
+                .onSizeChanged { heightPx = it.height.coerceAtLeast(1) }
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragStart = { offset -> pickAt(offset.y) },
+                        onDragEnd = { activeLetter = null },
+                        onDragCancel = { activeLetter = null },
+                        onVerticalDrag = { change, _ -> pickAt(change.position.y) }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures { offset -> pickAt(offset.y) }
+                },
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            letters.forEach { ch ->
+                val active = ch == activeLetter
+                val scale by animateFloatAsState(
+                    targetValue = if (active) 1.8f else 1f,
+                    label = "letterScale"
+                )
+                Text(
+                    text = ch.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 9.sp,
+                    color = if (active) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale }
                 )
             }
-            .pointerInput(Unit) {
-                detectTapGestures { offset -> pickAt(offset.y) }
-            },
-        verticalArrangement = Arrangement.SpaceEvenly,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        letters.forEach { ch ->
-            Text(
-                text = ch.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+        }
+
+        // Floating preview bubble that follows the finger, just left of the rail.
+        AnimatedVisibility(
+            visible = activeLetter != null,
+            enter = fadeIn() + scaleIn(initialScale = 0.6f),
+            exit = fadeOut() + scaleOut(targetScale = 0.6f),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset {
+                    IntOffset(
+                        x = -(24.dp.roundToPx() + 10.dp.roundToPx()),
+                        y = (touchY - 28.dp.toPx()).roundToInt().coerceAtLeast(0)
+                    )
+                }
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = shownLetter.toString(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
     }
 }
