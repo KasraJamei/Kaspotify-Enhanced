@@ -10,8 +10,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
@@ -23,7 +23,9 @@ import androidx.core.view.WindowCompat
  * recomposes per-frame — only the few composables that read this local do,
  * and only when the song changes.
  */
-val LocalAmbientColor = staticCompositionLocalOf { AmbientNeutral }
+// Dynamic (not static) so the per-song ambient animation only recomposes the few composables that
+// actually read it (backdrops/mini-player), never the whole app.
+val LocalAmbientColor = compositionLocalOf { AmbientNeutral }
 
 private val KaspotifyColorScheme = darkColorScheme(
     primary = Platinum,

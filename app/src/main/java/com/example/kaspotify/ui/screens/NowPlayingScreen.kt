@@ -105,7 +105,6 @@ fun NowPlayingScreen(
     val repeatMode by viewModel.repeatMode.collectAsStateWithLifecycle()
     val sleepTimer by viewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
     val visualizerEnabled by viewModel.visualizer.enabled.collectAsStateWithLifecycle()
-    val waveform by viewModel.visualizer.waveform.collectAsStateWithLifecycle()
     val recordAudioPermission = rememberPermissionState(android.Manifest.permission.RECORD_AUDIO)
 
     val current = song
@@ -228,7 +227,7 @@ fun NowPlayingScreen(
 
             if (visualizerEnabled) {
                 Spacer(Modifier.height(14.dp))
-                VisualizerView(waveform = waveform, modifier = Modifier.fillMaxWidth())
+                VisualizerView(bars = viewModel.visualizer.bars, modifier = Modifier.fillMaxWidth())
             }
 
             Spacer(Modifier.height(28.dp))

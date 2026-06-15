@@ -18,7 +18,9 @@ data class Song(
     val isFavorite: Boolean = false,
     val mimeType: String = "",
     val bitrateBps: Int? = null,
-    val filePath: String = ""
+    val filePath: String = "",
+    /** Plays within the current rolling 7-day window; surfaced in the Most Played section. */
+    val weeklyPlayCount: Int = 0
 ) {
     /** Album-art content URI derived from the album id. May not resolve for every album. */
     val artworkUri: Uri

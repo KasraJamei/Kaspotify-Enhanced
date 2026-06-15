@@ -34,6 +34,7 @@ fun SmartPlaylistScreen(
     viewModel: MusicViewModel,
     onBack: () -> Unit,
     onMore: (Song) -> Unit,
+    note: ((Song) -> String?)? = null,
     modifier: Modifier = Modifier
 ) {
     val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
@@ -72,7 +73,8 @@ fun SmartPlaylistScreen(
                             onToggleFavorite = { viewModel.toggleFavorite(song) },
                             onMore = { onMore(song) },
                             onPlayNext = { viewModel.playNext(song) },
-                            onAddToQueue = { viewModel.addToQueue(song) }
+                            onAddToQueue = { viewModel.addToQueue(song) },
+                            note = note?.invoke(song)
                         )
                     }
                 }

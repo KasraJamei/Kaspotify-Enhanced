@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        requestHighestRefreshRate()
         setContent {
             val viewModel: MusicViewModel = hiltViewModel()
             val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
@@ -55,6 +56,25 @@ class MainActivity : ComponentActivity() {
                     PermissionGate(viewModel)
                 }
             }
+        }
+    }
+
+    /** Ask the display for its highest refresh-rate mode so animations/scrolling run as smooth as the panel allows. */
+    private fun requestHighestRefreshRate() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val mode = display?.supportedModes?.maxByOrNull { it.refreshRate } ?: return
+                window.attributes = window.attributes.apply { preferredDisplayModeId = mode.modeId }
+            } else {
+                @Suppress("DEPRECATION")
+                val best = windowManager.defaultDisplay.supportedRefreshRates.maxOrNull() ?: return
+                window.attributes = window.attributes.apply {
+                    @Suppress("DEPRECATION")
+                    preferredRefreshRate = best
+                }
+            }
+        } catch (_: Throwable) {
+            // Refresh-rate hints are best-effort; ignore unsupported devices.
         }
     }
 }

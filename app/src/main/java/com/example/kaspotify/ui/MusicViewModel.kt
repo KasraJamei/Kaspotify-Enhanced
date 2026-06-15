@@ -16,9 +16,12 @@ import com.example.kaspotify.playback.ReverbPreset
 import com.example.kaspotify.playback.VisualizerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
@@ -50,6 +53,11 @@ class MusicViewModel @Inject constructor(
     val mostPlayed: StateFlow<List<Song>> = repository.mostPlayed.asState(emptyList())
     val recentlyAdded: StateFlow<List<Song>> = repository.recentlyAdded.asState(emptyList())
     val playlists: StateFlow<List<Playlist>> = repository.playlists.asState(emptyList())
+
+    /** One-shot, user-facing action confirmations shown as a transient in-app snackbar. */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
+    private fun notify(message: String) { _messages.tryEmit(message) }
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -112,9 +120,20 @@ class MusicViewModel @Inject constructor(
     fun seekTo(positionMs: Long) = player.seekTo(positionMs)
     fun toggleShuffle() = player.toggleShuffle()
     fun cycleRepeat() = player.cycleRepeat()
-    fun playNext(song: Song) = player.playNext(song)
-    fun addToQueue(song: Song) = player.addToQueueEnd(song)
-    fun setSleepTimer(minutes: Int?) = player.setSleepTimer(minutes)
+    fun playNext(song: Song) {
+        player.playNext(song)
+        notify("Playing next: ${song.title}")
+    }
+
+    fun addToQueue(song: Song) {
+        player.addToQueueEnd(song)
+        notify("Added to queue: ${song.title}")
+    }
+
+    fun setSleepTimer(minutes: Int?) {
+        player.setSleepTimer(minutes)
+        notify(if (minutes != null) "Sleep timer set for $minutes min" else "Sleep timer off")
+    }
     fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)
     fun removeQueueItem(index: Int) = player.removeQueueItem(index)
     fun setPlaybackSpeed(speed: Float) = player.setPlaybackSpeed(speed)
@@ -137,7 +156,10 @@ class MusicViewModel @Inject constructor(
         }
     }
 
-    fun toggleFavorite(song: Song) = viewModelScope.launch { repository.toggleFavorite(song) }
+    fun toggleFavorite(song: Song) = viewModelScope.launch {
+        repository.toggleFavorite(song)
+        notify(if (song.isFavorite) "Removed from Liked" else "Added to Liked")
+    }
 
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
@@ -149,7 +171,10 @@ class MusicViewModel @Inject constructor(
 
     /** Creates and saves a playlist populated with [songs] (used by the smart-playlist builder). */
     fun createSmartPlaylist(name: String, songs: List<Song>) =
-        viewModelScope.launch { repository.createPlaylistWith(name, songs) }
+        viewModelScope.launch {
+            repository.createPlaylistWith(name, songs)
+            notify("Created \"$name\" with ${songs.size} songs")
+        }
 
     private fun dailyPick(all: List<Song>): List<Song> {
         if (all.isEmpty()) return emptyList()
@@ -159,14 +184,26 @@ class MusicViewModel @Inject constructor(
 
     // ---- Playlist actions ----
 
-    fun createPlaylist(name: String) = viewModelScope.launch { repository.createPlaylist(name) }
+    fun createPlaylist(name: String) = viewModelScope.launch {
+        repository.createPlaylist(name)
+        notify("Playlist created")
+    }
     fun renamePlaylist(id: Long, name: String) =
         viewModelScope.launch { repository.renamePlaylist(id, name) }
-    fun deletePlaylist(id: Long) = viewModelScope.launch { repository.deletePlaylist(id) }
+    fun deletePlaylist(id: Long) = viewModelScope.launch {
+        repository.deletePlaylist(id)
+        notify("Playlist deleted")
+    }
     fun addToPlaylist(playlistId: Long, song: Song) =
-        viewModelScope.launch { repository.addToPlaylist(playlistId, song) }
+        viewModelScope.launch {
+            repository.addToPlaylist(playlistId, song)
+            notify("Added to playlist")
+        }
     fun removeFromPlaylist(playlistId: Long, song: Song) =
-        viewModelScope.launch { repository.removeFromPlaylist(playlistId, song) }
+        viewModelScope.launch {
+            repository.removeFromPlaylist(playlistId, song)
+            notify("Removed from playlist")
+        }
 
     private fun <T> Flow<T>.asState(initial: T): StateFlow<T> =
         stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)

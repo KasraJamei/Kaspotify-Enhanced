@@ -10,7 +10,11 @@ data class SongStateEntity(
     @PrimaryKey val songId: Long,
     val isFavorite: Boolean = false,
     val playCount: Int = 0,
-    val lastPlayedAt: Long = 0L
+    val lastPlayedAt: Long = 0L,
+    /** Plays within the current rolling 7-day window (resets weekly). */
+    val weeklyPlayCount: Int = 0,
+    /** Epoch millis when the current weekly window started. */
+    val weekStartAt: Long = 0L
 )
 
 @Entity(tableName = "playlists")

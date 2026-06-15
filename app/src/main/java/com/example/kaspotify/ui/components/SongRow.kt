@@ -44,6 +44,7 @@ fun SongRow(
     onMore: () -> Unit,
     onPlayNext: () -> Unit = {},
     onAddToQueue: () -> Unit = {},
+    note: String? = null,
     modifier: Modifier = Modifier
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
@@ -119,6 +120,15 @@ fun SongRow(
                         Spacer(Modifier.width(6.dp))
                         QualityBadge(song)
                     }
+                }
+                if (note != null) {
+                    Text(
+                        text = note,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             IconButton(onClick = onToggleFavorite) {

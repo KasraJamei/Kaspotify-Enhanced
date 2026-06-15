@@ -28,6 +28,10 @@ interface MusicDao {
     @Query("SELECT songId FROM song_state WHERE playCount > 0 ORDER BY playCount DESC LIMIT :limit")
     fun mostPlayedIds(limit: Int = 50): Flow<List<Long>>
 
+    /** Full state rows for every song that's ever been played, for weekly-aware ranking. */
+    @Query("SELECT * FROM song_state WHERE playCount > 0")
+    fun playedStates(): Flow<List<SongStateEntity>>
+
     // ---- Playlists ----
 
     @Insert

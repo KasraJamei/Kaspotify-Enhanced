@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PlaylistSongCrossRef::class,
         SearchHistoryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -26,6 +26,14 @@ abstract class MusicDatabase : RoomDatabase() {
                     "CREATE TABLE IF NOT EXISTS `search_history` " +
                         "(`query` TEXT NOT NULL, `lastUsedAt` INTEGER NOT NULL, PRIMARY KEY(`query`))"
                 )
+            }
+        }
+
+        /** v2 -> v3: add weekly play-count tracking columns to song_state. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE song_state ADD COLUMN weeklyPlayCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE song_state ADD COLUMN weekStartAt INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

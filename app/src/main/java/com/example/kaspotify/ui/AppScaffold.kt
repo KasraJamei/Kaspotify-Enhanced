@@ -45,9 +45,12 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,12 +108,20 @@ fun AppScaffold(viewModel: MusicViewModel) {
     var showQuality by remember { mutableStateOf(false) }
     var moreSong by remember { mutableStateOf<Song?>(null) }
 
+    // Only currentSong is read here (changes once per track). isPlaying/position/duration are
+    // collected inside DockedMiniPlayer so their frequent ticks don't recompose this whole tree.
     val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
-    val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
-    val positionMs by viewModel.positionMs.collectAsStateWithLifecycle()
-    val durationMs by viewModel.durationMs.collectAsStateWithLifecycle()
 
     val onMore: (Song) -> Unit = { moreSong = it }
+
+    // Transient in-app action confirmations.
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { message ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Full-bleed gradient backdrop sits behind everything.
@@ -119,6 +130,11 @@ fun AppScaffold(viewModel: MusicViewModel) {
         Scaffold(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets.statusBars,
+            snackbarHost = {
+                SnackbarHost(snackbarHostState) { data ->
+                    GlassSnackbar(data.visuals.message)
+                }
+            },
             bottomBar = {
                 // Floating mini-player + glass nav bar, pinned above system insets.
                 Column(
@@ -128,14 +144,11 @@ fun AppScaffold(viewModel: MusicViewModel) {
                         .padding(bottom = 8.dp)
                 ) {
                     currentSong?.let { song ->
-                        val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             Box(Modifier.widthIn(max = 640.dp)) {
-                                MiniPlayer(
+                                DockedMiniPlayer(
+                                    viewModel = viewModel,
                                     song = song,
-                                    isPlaying = isPlaying,
-                                    progress = progress,
-                                    onTogglePlay = viewModel::togglePlayPause,
                                     onClick = { showNowPlaying = true }
                                 )
                             }
@@ -255,7 +268,12 @@ fun AppScaffold(viewModel: MusicViewModel) {
                     },
                     viewModel = viewModel,
                     onBack = { openedSmartPlaylist = null },
-                    onMore = onMore
+                    onMore = onMore,
+                    note = if (type == SmartPlaylistType.MOST_PLAYED) { song ->
+                        song.weeklyPlayCount.takeIf { it > 0 }?.let { n ->
+                            if (n == 1) "Listened once this week" else "Listened $n times this week"
+                        }
+                    } else null
                 )
             }
         }
@@ -268,6 +286,47 @@ fun AppScaffold(viewModel: MusicViewModel) {
 
     moreSong?.let { song ->
         MoreSheet(song = song, viewModel = viewModel, onDismiss = { moreSong = null })
+    }
+}
+
+/**
+ * Wraps [MiniPlayer] and collects the frequently-changing playback state (isPlaying / position /
+ * duration) here, so the 500ms position ticks only recompose this small subtree — not AppScaffold
+ * and every list behind it.
+ */
+@Composable
+private fun DockedMiniPlayer(viewModel: MusicViewModel, song: Song, onClick: () -> Unit) {
+    val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    val positionMs by viewModel.positionMs.collectAsStateWithLifecycle()
+    val durationMs by viewModel.durationMs.collectAsStateWithLifecycle()
+    val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
+    MiniPlayer(
+        song = song,
+        isPlaying = isPlaying,
+        progress = progress,
+        onTogglePlay = viewModel::togglePlayPause,
+        onClick = onClick
+    )
+}
+
+@Composable
+private fun GlassSnackbar(message: String) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .background(GlassFillStrong)
+            .border(1.dp, GlassStroke, shape)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
     }
 }
 

@@ -45,8 +45,26 @@ class MusicRepository @Inject constructor(
     val recentlyPlayed: Flow<List<Song>> =
         combine(songs, dao.recentlyPlayedIds()) { list, ids -> orderByIds(list, ids) }
 
+    /**
+     * Most Played, prioritized by plays in the current rolling 7-day window (then all-time as a
+     * tiebreak/fallback). Each returned song carries its [Song.weeklyPlayCount] for the UI label.
+     */
     val mostPlayed: Flow<List<Song>> =
-        combine(songs, dao.mostPlayedIds()) { list, ids -> orderByIds(list, ids) }
+        combine(songs, dao.playedStates()) { list, states ->
+            val now = System.currentTimeMillis()
+            val byId = list.associateBy { it.id }
+            states.mapNotNull { st ->
+                val song = byId[st.songId] ?: return@mapNotNull null
+                val weekly = if (now - st.weekStartAt < WEEK_MS) st.weeklyPlayCount else 0
+                Triple(song, weekly, st.playCount)
+            }
+                .sortedWith(
+                    compareByDescending<Triple<Song, Int, Int>> { it.second }
+                        .thenByDescending { it.third }
+                )
+                .map { (song, weekly, _) -> song.copy(weeklyPlayCount = weekly) }
+                .take(MAX_SMART_PLAYLIST_SIZE)
+        }
 
     val recentlyAdded: Flow<List<Song>> =
         songs.map { list -> list.sortedByDescending { it.dateAddedSec }.take(MAX_SMART_PLAYLIST_SIZE) }
@@ -68,11 +86,16 @@ class MusicRepository @Inject constructor(
     }
 
     suspend fun recordPlay(song: Song) {
+        val now = System.currentTimeMillis()
         val current = dao.getState(song.id) ?: SongStateEntity(songId = song.id)
+        // Roll the weekly window: if it's been a week (or never started), reset to 1, else increment.
+        val newWindow = current.weekStartAt == 0L || now - current.weekStartAt >= WEEK_MS
         dao.upsertState(
             current.copy(
                 playCount = current.playCount + 1,
-                lastPlayedAt = System.currentTimeMillis()
+                lastPlayedAt = now,
+                weeklyPlayCount = if (newWindow) 1 else current.weeklyPlayCount + 1,
+                weekStartAt = if (newWindow) now else current.weekStartAt
             )
         )
     }
@@ -149,5 +172,6 @@ class MusicRepository @Inject constructor(
 
     companion object {
         private const val MAX_SMART_PLAYLIST_SIZE = 100
+        private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
     }
 }
