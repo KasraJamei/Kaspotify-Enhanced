@@ -1,5 +1,14 @@
 package com.example.kaspotify.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +43,9 @@ import com.example.kaspotify.data.model.Song
 import com.example.kaspotify.ui.MusicViewModel
 import com.example.kaspotify.ui.components.SongRow
 
+private enum class SearchMode { RECENT, EMPTY, RESULTS }
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
     viewModel: MusicViewModel,
@@ -62,7 +74,11 @@ fun SearchScreen(
             placeholder = { Text("Songs, artists, albums") },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             trailingIcon = {
-                if (query.isNotEmpty()) {
+                AnimatedVisibility(
+                    visible = query.isNotEmpty(),
+                    enter = scaleIn(tween(150)) + fadeIn(tween(150)),
+                    exit = scaleOut(tween(150)) + fadeOut(tween(150))
+                ) {
                     IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
                         Icon(Icons.Filled.Close, contentDescription = "Clear")
                     }
@@ -83,34 +99,50 @@ fun SearchScreen(
             })
         )
 
-        when {
-            query.isBlank() -> RecentSearches(
-                recentSearches = recentSearches,
-                onPick = { viewModel.onSearchQueryChange(it) },
-                onRemove = { viewModel.removeSearch(it) },
-                onClear = { viewModel.clearSearchHistory() }
-            )
-            results.isEmpty() -> CenterText("No results for \"$query\"")
-            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(results, key = { it.id }) { song ->
-                    SongRow(
-                        song = song,
-                        isCurrent = song.id == currentId,
-                        onClick = {
-                            viewModel.recordSearch(query)
-                            viewModel.playSong(song, results)
-                        },
-                        onToggleFavorite = { viewModel.toggleFavorite(song) },
-                        onMore = { onMore(song) },
-                        onPlayNext = { viewModel.playNext(song) },
-                        onAddToQueue = { viewModel.addToQueue(song) }
-                    )
+        // Cross-fade between the three search states (recent history / no results / results) so
+        // the content gently transitions as you type instead of snapping.
+        val mode = when {
+            query.isBlank() -> SearchMode.RECENT
+            results.isEmpty() -> SearchMode.EMPTY
+            else -> SearchMode.RESULTS
+        }
+        AnimatedContent(
+            targetState = mode,
+            transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
+            label = "searchMode"
+        ) { m ->
+            when (m) {
+                SearchMode.RECENT -> RecentSearches(
+                    recentSearches = recentSearches,
+                    onPick = { viewModel.onSearchQueryChange(it) },
+                    onRemove = { viewModel.removeSearch(it) },
+                    onClear = { viewModel.clearSearchHistory() }
+                )
+                SearchMode.EMPTY -> CenterText("No results for \"$query\"")
+                SearchMode.RESULTS -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(results, key = { it.id }) { song ->
+                        SongRow(
+                            song = song,
+                            isCurrent = song.id == currentId,
+                            onClick = {
+                                viewModel.recordSearch(query)
+                                viewModel.playSong(song, results)
+                            },
+                            onToggleFavorite = { viewModel.toggleFavorite(song) },
+                            onMore = { onMore(song) },
+                            onPlayNext = { viewModel.playNext(song) },
+                            onAddToQueue = { viewModel.addToQueue(song) },
+                            // Rows slide to their new position as the query narrows the list.
+                            modifier = Modifier.animateItemPlacement(tween(250))
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RecentSearches(
     recentSearches: List<String>,
@@ -137,6 +169,7 @@ private fun RecentSearches(
             items(recentSearches, key = { it }) { term ->
                 Row(
                     modifier = Modifier
+                        .animateItemPlacement(tween(250))
                         .fillMaxWidth()
                         .clickable { onPick(term) }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
