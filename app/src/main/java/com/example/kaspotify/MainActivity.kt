@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaspotify.ui.AppScaffold
+import com.example.kaspotify.ui.LocalAppSettings
 import com.example.kaspotify.ui.MusicViewModel
 import com.example.kaspotify.ui.theme.KaspotifyTheme
 import com.example.kaspotify.ui.theme.asAmbient
@@ -41,33 +43,47 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        requestHighestRefreshRate()
         setContent {
             val viewModel: MusicViewModel = hiltViewModel()
+            val settings by viewModel.settings.collectAsStateWithLifecycle()
             val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
             val artworkAccent by rememberArtworkAccentColor(currentSong?.artworkUri)
-            // The accent stays platinum; the art color only feeds the ambient gradient backdrop.
-            val ambientColor = artworkAccent?.asAmbient()
-            KaspotifyTheme(ambientColor = ambientColor) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    PermissionGate(viewModel)
+
+            // Apply the high-refresh-rate hint whenever the toggle changes.
+            LaunchedEffect(settings.highRefreshRate) { applyHighestRefreshRate(settings.highRefreshRate) }
+
+            // The accent stays platinum; the art color only feeds the ambient gradient backdrop,
+            // and only when album-art theming is enabled.
+            val ambientColor = if (settings.albumArtTheming) artworkAccent?.asAmbient() else null
+            CompositionLocalProvider(LocalAppSettings provides settings) {
+                KaspotifyTheme(ambientColor = ambientColor) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        PermissionGate(viewModel)
+                    }
                 }
             }
         }
     }
 
-    /** Ask the display for its highest refresh-rate mode so animations/scrolling run as smooth as the panel allows. */
-    private fun requestHighestRefreshRate() {
+    /**
+     * Ask the display for its highest refresh-rate mode so animations/scrolling run as smooth as the
+     * panel allows. When [enabled] is false, clears the hint back to the system default.
+     */
+    private fun applyHighestRefreshRate(enabled: Boolean) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val mode = display?.supportedModes?.maxByOrNull { it.refreshRate } ?: return
-                window.attributes = window.attributes.apply { preferredDisplayModeId = mode.modeId }
+                val modeId = if (enabled) {
+                    display?.supportedModes?.maxByOrNull { it.refreshRate }?.modeId ?: 0
+                } else 0
+                window.attributes = window.attributes.apply { preferredDisplayModeId = modeId }
             } else {
                 @Suppress("DEPRECATION")
-                val best = windowManager.defaultDisplay.supportedRefreshRates.maxOrNull() ?: return
+                val best = if (enabled) {
+                    windowManager.defaultDisplay.supportedRefreshRates.maxOrNull() ?: 0f
+                } else 0f
                 window.attributes = window.attributes.apply {
                     @Suppress("DEPRECATION")
                     preferredRefreshRate = best

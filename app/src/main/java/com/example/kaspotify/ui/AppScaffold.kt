@@ -79,6 +79,7 @@ import com.example.kaspotify.ui.screens.PlaylistsScreen
 import com.example.kaspotify.ui.screens.QualityScreen
 import com.example.kaspotify.ui.screens.QueueScreen
 import com.example.kaspotify.ui.screens.SearchScreen
+import com.example.kaspotify.ui.screens.SettingsScreen
 import com.example.kaspotify.ui.screens.SmartPlaylistScreen
 import com.example.kaspotify.ui.screens.SmartPlaylistType
 import com.example.kaspotify.ui.theme.GlassFill
@@ -112,6 +113,7 @@ fun AppScaffold(viewModel: MusicViewModel) {
     var showEffects by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var showQuality by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var moreSong by remember { mutableStateOf<Song?>(null) }
 
     // Only currentSong is read here (changes once per track). isPlaying/position/duration are
@@ -119,13 +121,15 @@ fun AppScaffold(viewModel: MusicViewModel) {
     val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
 
     val onMore: (Song) -> Unit = { moreSong = it }
+    val toastsEnabled = LocalAppSettings.current.inAppToasts
 
     // Transient in-app action confirmations — a short, self-dismissing glass toast. Custom (instead
     // of a Snackbar) so we control the duration: a quick ~1.4s flash, not the ~4s Snackbar default.
     var toastText by remember { mutableStateOf("") }
     var toastVisible by remember { mutableStateOf(false) }
     var toastSeq by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(toastsEnabled) {
+        if (!toastsEnabled) { toastVisible = false; return@LaunchedEffect }
         viewModel.messages.collect { message ->
             toastText = message
             toastVisible = true
@@ -203,7 +207,8 @@ fun AppScaffold(viewModel: MusicViewModel) {
                                     onMore = onMore,
                                     onOpenAlbum = { openedAlbumId = it },
                                     onOpenArtist = { openedArtistName = it },
-                                    onOpenSmartPlaylist = { openedSmartPlaylist = it }
+                                    onOpenSmartPlaylist = { openedSmartPlaylist = it },
+                                    onOpenSettings = { showSettings = true }
                                 )
                             }
                         }
@@ -290,6 +295,11 @@ fun AppScaffold(viewModel: MusicViewModel) {
         AnimatedVisibility(visible = showQuality, enter = overlayEnter, exit = overlayExit) {
             BackHandler(enabled = showQuality) { showQuality = false }
             QualityScreen(viewModel = viewModel, onBack = { showQuality = false }, onMore = onMore)
+        }
+
+        AnimatedVisibility(visible = showSettings, enter = overlayEnter, exit = overlayExit) {
+            BackHandler(enabled = showSettings) { showSettings = false }
+            SettingsScreen(viewModel = viewModel, onBack = { showSettings = false })
         }
 
         // Toast lives at the very top of the stack so confirmations are visible even when the

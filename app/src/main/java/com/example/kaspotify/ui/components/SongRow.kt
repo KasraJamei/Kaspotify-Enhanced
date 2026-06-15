@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.kaspotify.data.model.Song
+import com.example.kaspotify.ui.LocalAppSettings
 import com.example.kaspotify.ui.theme.GlassFill
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +48,12 @@ fun SongRow(
     note: String? = null,
     modifier: Modifier = Modifier
 ) {
+    // Swipe-to-queue/play-next is an opt-out feature controlled from Settings.
+    if (!LocalAppSettings.current.listSwipeGestures) {
+        SongRowContent(song, isCurrent, note, onClick, onToggleFavorite, onMore, modifier)
+        return
+    }
+
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             when (value) {
@@ -84,6 +91,21 @@ fun SongRow(
             }
         }
     ) {
+        SongRowContent(song, isCurrent, note, onClick, onToggleFavorite, onMore)
+    }
+}
+
+@Composable
+private fun SongRowContent(
+    song: Song,
+    isCurrent: Boolean,
+    note: String?,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onMore: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
         val rowShape = RoundedCornerShape(16.dp)
         val highlight = if (isCurrent) GlassFill else androidx.compose.ui.graphics.Color.Transparent
         Row(

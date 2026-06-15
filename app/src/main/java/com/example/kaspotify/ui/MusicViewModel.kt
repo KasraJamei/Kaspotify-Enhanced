@@ -8,6 +8,8 @@ import com.example.kaspotify.data.model.Playlist
 import com.example.kaspotify.data.model.QualityTier
 import com.example.kaspotify.data.model.Song
 import com.example.kaspotify.data.repository.MusicRepository
+import com.example.kaspotify.data.settings.AppSettings
+import com.example.kaspotify.data.settings.SettingsRepository
 import com.example.kaspotify.playback.EqualizerController
 import com.example.kaspotify.playback.PlayerController
 import com.example.kaspotify.playback.RepeatMode
@@ -33,11 +35,23 @@ import javax.inject.Inject
 @HiltViewModel
 class MusicViewModel @Inject constructor(
     private val repository: MusicRepository,
+    private val settingsRepository: SettingsRepository,
     val player: PlayerController,
     val equalizer: EqualizerController,
     val visualizer: VisualizerController,
     val reverb: ReverbController
 ) : ViewModel() {
+
+    // ---- Settings / feature toggles ----
+    val settings: StateFlow<AppSettings> = settingsRepository.settings
+
+    fun setAlbumArtTheming(v: Boolean) = settingsRepository.setAlbumArtTheming(v)
+    fun setHighRefreshRate(v: Boolean) = settingsRepository.setHighRefreshRate(v)
+    fun setInAppToasts(v: Boolean) = settingsRepository.setInAppToasts(v)
+    fun setListSwipeGestures(v: Boolean) = settingsRepository.setListSwipeGestures(v)
+    fun setAudioEffects(v: Boolean) = settingsRepository.setAudioEffects(v)
+    fun setVisualizerAvailable(v: Boolean) = settingsRepository.setVisualizer(v)
+    fun setOnboardingSeen(v: Boolean) = settingsRepository.setOnboardingSeen(v)
 
     fun songsForAlbum(albumId: Long): List<Song> =
         songs.value.filter { it.albumId == albumId }

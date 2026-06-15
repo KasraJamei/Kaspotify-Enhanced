@@ -77,6 +77,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaspotify.playback.RepeatMode
+import com.example.kaspotify.ui.LocalAppSettings
 import com.example.kaspotify.ui.MusicViewModel
 import com.example.kaspotify.ui.components.Artwork
 import com.example.kaspotify.ui.components.QualityBadge
@@ -407,24 +408,33 @@ fun NowPlayingScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // Secondary actions
+            // Secondary actions. Visualizer & Effects chips are toggleable from Settings.
+            val appSettings = LocalAppSettings.current
+            // If the visualizer feature is switched off while it's running, stop it.
+            LaunchedEffect(appSettings.visualizer) {
+                if (!appSettings.visualizer && visualizerEnabled) viewModel.setVisualizerEnabled(false)
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ActionChip(
-                    icon = Icons.Filled.GraphicEq,
-                    label = "Visualizer",
-                    active = visualizerEnabled,
-                    onClick = {
-                        if (visualizerEnabled) viewModel.setVisualizerEnabled(false)
-                        else if (recordAudioPermission.status.isGranted) viewModel.setVisualizerEnabled(true)
-                        else recordAudioPermission.launchPermissionRequest()
-                    }
-                )
+                if (appSettings.visualizer) {
+                    ActionChip(
+                        icon = Icons.Filled.GraphicEq,
+                        label = "Visualizer",
+                        active = visualizerEnabled,
+                        onClick = {
+                            if (visualizerEnabled) viewModel.setVisualizerEnabled(false)
+                            else if (recordAudioPermission.status.isGranted) viewModel.setVisualizerEnabled(true)
+                            else recordAudioPermission.launchPermissionRequest()
+                        }
+                    )
+                }
                 ActionChip(Icons.Filled.Equalizer, "EQ", false, onOpenEqualizer)
-                ActionChip(Icons.Filled.Speed, "Effects", false, onOpenEffects)
+                if (appSettings.audioEffects) {
+                    ActionChip(Icons.Filled.Speed, "Effects", false, onOpenEffects)
+                }
                 SleepTimerChip(selected = sleepTimer, onSelect = viewModel::setSleepTimer)
             }
 

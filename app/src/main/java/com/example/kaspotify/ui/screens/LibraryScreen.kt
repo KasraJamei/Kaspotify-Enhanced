@@ -25,12 +25,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
@@ -138,6 +140,7 @@ fun LibraryScreen(
     onOpenAlbum: (Long) -> Unit,
     onOpenArtist: (String) -> Unit,
     onOpenSmartPlaylist: (SmartPlaylistType) -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -162,7 +165,17 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             HomeWordmark()
-            ShuffleButton(enabled = songs.isNotEmpty()) { viewModel.shuffleAll(songs) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ShuffleButton(enabled = songs.isNotEmpty()) { viewModel.shuffleAll(songs) }
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
 
         SmartPlaylistCards(onOpenSmartPlaylist)
