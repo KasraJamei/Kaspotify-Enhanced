@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.HeartBroken
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -89,6 +90,9 @@ import com.google.accompanist.permissions.rememberPermissionState
 import java.util.Locale
 
 private val sleepOptions = listOf<Int?>(null, 15, 30, 45, 60)
+
+/** Tint for the broken-heart "unlike" burst. */
+private val DislikeRed = Color(0xFFFF5A5F)
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -170,11 +174,20 @@ fun NowPlayingScreen(
 
             // Hero artwork
             var heartTrigger by remember { mutableIntStateOf(0) }
+            // true => a "like" just happened (heart pops & drifts up); false => an "unlike" (broken
+            // heart drifts down). Drives which glyph the burst overlay shows.
+            var heartIsLike by remember { mutableStateOf(true) }
             val heartAnim = remember { Animatable(0f) }
             LaunchedEffect(heartTrigger) {
                 if (heartTrigger == 0) return@LaunchedEffect
                 heartAnim.snapTo(0f)
                 heartAnim.animateTo(1f, animationSpec = tween(680, easing = FastOutSlowInEasing))
+            }
+            // Toggling via the heart button shows like *or* dislike depending on the new state.
+            val toggleLike: () -> Unit = {
+                heartIsLike = !current.isFavorite
+                viewModel.toggleFavorite(current)
+                heartTrigger++
             }
             var artworkVisible by remember(current.id) { mutableStateOf(false) }
             val artworkScale by animateFloatAsState(
@@ -197,8 +210,10 @@ fun NowPlayingScreen(
                     }
                     .pointerInput(current.id) {
                         detectTapGestures(
+                            // Double-tap only ever *likes* (Spotify-style), never accidentally unlikes.
                             onDoubleTap = {
                                 if (!current.isFavorite) viewModel.toggleFavorite(current)
+                                heartIsLike = true
                                 heartTrigger++
                             }
                         )
@@ -212,14 +227,15 @@ fun NowPlayingScreen(
                 )
                 val hp = heartAnim.value
                 if (hp > 0f && hp < 1f) {
+                    val burstColor = if (heartIsLike) Color.White else DislikeRed
                     // Expanding ring that ripples outward and fades.
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
                             .size((80 + 150 * hp).dp)
-                            .border(2.dp, Color.White.copy(alpha = (1f - hp) * 0.5f), CircleShape)
+                            .border(2.dp, burstColor.copy(alpha = (1f - hp) * 0.5f), CircleShape)
                     )
-                    // Heart: overshoot pop, then drift up and fade out.
+                    // Glyph: overshoot pop, then drift (up for like, down for dislike) and fade.
                     val scale = when {
                         hp < 0.4f -> 0.4f + (1.25f - 0.4f) * (hp / 0.4f)
                         hp < 0.6f -> 1.25f + (1f - 1.25f) * ((hp - 0.4f) / 0.2f)
@@ -227,9 +243,9 @@ fun NowPlayingScreen(
                     }
                     val heartAlpha = if (hp < 0.7f) 1f else (1f - (hp - 0.7f) / 0.3f).coerceIn(0f, 1f)
                     Icon(
-                        imageVector = Icons.Filled.Favorite,
+                        imageVector = if (heartIsLike) Icons.Filled.Favorite else Icons.Filled.HeartBroken,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = burstColor,
                         modifier = Modifier
                             .align(Alignment.Center)
                             .size(120.dp)
@@ -237,7 +253,9 @@ fun NowPlayingScreen(
                                 scaleX = scale
                                 scaleY = scale
                                 alpha = heartAlpha
-                                translationY = -70f * hp
+                                // Likes float up; broken hearts sink down with a slight tilt.
+                                translationY = if (heartIsLike) -70f * hp else 70f * hp
+                                rotationZ = if (heartIsLike) 0f else (1f - hp) * 10f
                             }
                     )
                 }
@@ -282,11 +300,11 @@ fun NowPlayingScreen(
                         }
                     }
                 }
-                IconButton(onClick = { viewModel.toggleFavorite(current) }) {
+                IconButton(onClick = toggleLike) {
                     Icon(
                         imageVector = if (current.isFavorite) Icons.Filled.Favorite
                         else Icons.Filled.FavoriteBorder,
-                        contentDescription = "Favorite",
+                        contentDescription = if (current.isFavorite) "Unlike" else "Like",
                         tint = if (current.isFavorite) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )

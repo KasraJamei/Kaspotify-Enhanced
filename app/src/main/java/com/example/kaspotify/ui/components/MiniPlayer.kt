@@ -22,9 +22,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +49,7 @@ fun MiniPlayer(
     isPlaying: Boolean,
     progress: Float,
     onTogglePlay: () -> Unit,
+    onToggleLike: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -96,6 +100,15 @@ fun MiniPlayer(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onToggleLike) {
+                    Icon(
+                        imageVector = if (song.isFavorite) Icons.Filled.Favorite
+                        else Icons.Filled.FavoriteBorder,
+                        contentDescription = if (song.isFavorite) "Unlike" else "Like",
+                        tint = if (song.isFavorite) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Box(

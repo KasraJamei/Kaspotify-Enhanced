@@ -325,6 +325,7 @@ private fun DockedMiniPlayer(viewModel: MusicViewModel, song: Song, onClick: () 
         isPlaying = isPlaying,
         progress = progress,
         onTogglePlay = viewModel::togglePlayPause,
+        onToggleLike = { viewModel.toggleFavorite(song) },
         onClick = onClick
     )
 }
