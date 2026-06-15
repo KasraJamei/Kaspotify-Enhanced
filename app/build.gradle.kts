@@ -22,6 +22,23 @@ android {
         }
     }
 
+    // Release signing is enabled only when a keystore + password are provided (e.g. by CI from
+    // repo secrets). Without them the release build is produced unsigned, and local/dev builds keep
+    // working with no setup required.
+    val releaseKeystore = file("release.keystore")
+    val canSignRelease = releaseKeystore.exists() && System.getenv("KEYSTORE_PASSWORD") != null
+
+    signingConfigs {
+        if (canSignRelease) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -30,6 +47,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (canSignRelease) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     lint {

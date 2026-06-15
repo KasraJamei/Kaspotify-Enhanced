@@ -29,17 +29,41 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # Builds the debug APK, which is signed with the auto-generated debug key and
-      # therefore directly installable. For a Play-Store-ready signed *release* APK,
-      # add a keystore as repo secrets and replace this step (see the note at the
-      # bottom of this file).
+      # If signing secrets are present, build a properly signed *release* APK.
+      # Otherwise fall back to the debug APK (signed with the auto-generated debug
+      # key), which stays directly installable — so releases never regress while
+      # the keystore secrets aren't configured yet.
       - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Stage APK with version name
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk "dist/Kaspotify-${GITHUB_REF_NAME}.apk"
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "Signing secrets found — building a signed release APK."
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+            ./gradlew assembleRelease --stacktrace
+            cp app/build/outputs/apk/release/app-release.apk "dist/Kaspotify-${GITHUB_REF_NAME}.apk"
+            rm -f app/release.keystore
+            {
+              echo "**Kaspotify ${GITHUB_REF_NAME}**"
+              echo ""
+              echo "The attached APK is **signed with the project's release key** and directly installable."
+            } > dist/NOTES.md
+          else
+            echo "No signing secrets — building the installable debug APK."
+            ./gradlew assembleDebug --stacktrace
+            cp app/build/outputs/apk/debug/app-debug.apk "dist/Kaspotify-${GITHUB_REF_NAME}.apk"
+            {
+              echo "**Kaspotify ${GITHUB_REF_NAME}**"
+              echo ""
+              echo "The attached APK is **debug-signed** (installable on any device with \"install"
+              echo "unknown apps\" enabled). It is not signed with a release key, so it is not"
+              echo "Play-Store-ready as-is."
+            } > dist/NOTES.md
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -47,20 +71,21 @@ jobs:
           name: Kaspotify ${{ github.ref_name }}
           generate_release_notes: true
           files: dist/Kaspotify-*.apk
-          body: |
-            **Kaspotify ${{ github.ref_name }}**
-
-            The attached APK is **debug-signed** (installable on any device with
-            "install unknown apps" enabled). It is not signed with a release key, so
-            it is not Play-Store-ready as-is.
+          body_path: dist/NOTES.md
 
 # ---------------------------------------------------------------------------
-# To ship a properly signed RELEASE APK instead:
-#   1. Generate a keystore:  keytool -genkey -v -keystore kaspotify.jks \
-#        -keyalg RSA -keysize 2048 -validity 10000 -alias kaspotify
-#   2. Add repo secrets: KEYSTORE_BASE64 (base64 of the .jks), KEYSTORE_PASSWORD,
-#      KEY_ALIAS, KEY_PASSWORD.
-#   3. Add a signingConfig to app/build.gradle.kts wired to those env vars, build
-#      with `./gradlew assembleRelease`, and point the upload at
-#      app/build/outputs/apk/release/app-release.apk.
+# To ship a properly signed RELEASE APK, add these repo secrets
+# (Settings -> Secrets and variables -> Actions). The build config and this
+# workflow already use them automatically once present:
+#   1. Generate a keystore (keep the .jks file private — do NOT commit it):
+#        keytool -genkey -v -keystore kaspotify.jks \
+#          -keyalg RSA -keysize 2048 -validity 10000 -alias kaspotify
+#   2. Base64-encode it:   base64 -w0 kaspotify.jks   (macOS: base64 -i kaspotify.jks)
+#   3. Add secrets:
+#        KEYSTORE_BASE64    = the base64 string from step 2
+#        KEYSTORE_PASSWORD  = the keystore password
+#        KEY_ALIAS          = kaspotify
+#        KEY_PASSWORD       = the key password
+#   Re-push a tag (e.g. git tag v1.6 && git push origin v1.6) and the release
+#   APK will be signed with your release key.
 # ---------------------------------------------------------------------------
