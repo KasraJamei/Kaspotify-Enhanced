@@ -22,8 +22,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Whatshot
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
@@ -33,6 +36,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaspotify.data.model.Album
 import com.example.kaspotify.data.model.Artist
@@ -128,12 +134,17 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var sortOrdinal by rememberSaveable { mutableIntStateOf(0) }
+    val sortMode = SortMode.entries[sortOrdinal]
     val songs by viewModel.songs.collectAsStateWithLifecycle()
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val artists by viewModel.artists.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
     val currentId = currentSong?.id
+
+    val sortedSongs = remember(songs, sortMode) { sortMode.sort(songs) }
+    val sortedFavorites = remember(favorites, sortMode) { sortMode.sort(favorites) }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -143,7 +154,7 @@ fun LibraryScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Library", style = MaterialTheme.typography.displaySmall)
+            HomeWordmark()
             ShuffleButton(enabled = songs.isNotEmpty()) { viewModel.shuffleAll(songs) }
         }
 
@@ -152,11 +163,109 @@ fun LibraryScreen(
 
         PillTabs(selectedTab) { selectedTab = it }
 
+        // Sort/filter applies to the song lists (Songs & Favorites).
+        if (selectedTab == 0 || selectedTab == 3) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SortPill(current = sortMode, onSelect = { sortOrdinal = it.ordinal })
+            }
+        }
+
         when (selectedTab) {
-            0 -> SongList(songs, currentId, viewModel, onMore)
+            0 -> SongList(sortedSongs, currentId, viewModel, onMore)
             1 -> AlbumList(albums) { album -> onOpenAlbum(album.id) }
             2 -> ArtistList(artists) { artist -> onOpenArtist(artist.name) }
-            else -> SongList(favorites, currentId, viewModel, onMore, emptyText = "No favorites yet")
+            else -> SongList(sortedFavorites, currentId, viewModel, onMore, emptyText = "No favorites yet")
+        }
+    }
+}
+
+private enum class SortMode(val label: String) {
+    TITLE_ASC("Title A–Z"),
+    TITLE_DESC("Title Z–A"),
+    ARTIST("Artist"),
+    NEWEST("Newest"),
+    OLDEST("Oldest"),
+    LONGEST("Longest");
+
+    fun sort(list: List<Song>): List<Song> = when (this) {
+        TITLE_ASC -> list.sortedBy { it.title.lowercase() }
+        TITLE_DESC -> list.sortedByDescending { it.title.lowercase() }
+        ARTIST -> list.sortedBy { it.artist.lowercase() }
+        NEWEST -> list.sortedByDescending { it.dateAddedSec }
+        OLDEST -> list.sortedBy { it.dateAddedSec }
+        LONGEST -> list.sortedByDescending { it.durationMs }
+    }
+}
+
+@Composable
+private fun HomeWordmark() {
+    Column {
+        Text(
+            "KASPOTIFY",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.sp
+        )
+        Spacer(Modifier.height(4.dp))
+        Box(
+            modifier = Modifier
+                .width(44.dp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
+    }
+}
+
+@Composable
+private fun SortPill(current: SortMode, onSelect: (SortMode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(percent = 50)
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(shape)
+                .background(GlassFill)
+                .border(1.dp, GlassStroke, shape)
+                .clickable { expanded = true }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.SwapVert,
+                contentDescription = "Sort",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                current.label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            SortMode.entries.forEach { mode ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            mode.label,
+                            color = if (mode == current) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onBackground
+                        )
+                    },
+                    onClick = {
+                        onSelect(mode)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }

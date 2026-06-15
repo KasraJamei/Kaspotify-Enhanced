@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -48,9 +49,13 @@ fun Artwork(
             modifier = Modifier.size(size / 2.4f)
         )
         if (uri != null) {
+            // Decode the bitmap at roughly the on-screen size instead of full album-art resolution —
+            // keeps memory low and scrolling smooth in long lists.
+            val targetPx = with(LocalDensity.current) { size.roundToPx() }
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(uri)
+                    .size(targetPx)
                     .crossfade(true)
                     .build(),
                 contentDescription = null,

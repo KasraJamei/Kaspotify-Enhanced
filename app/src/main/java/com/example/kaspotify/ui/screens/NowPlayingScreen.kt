@@ -1,6 +1,8 @@
 package com.example.kaspotify.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -58,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -166,14 +169,13 @@ fun NowPlayingScreen(
             Spacer(Modifier.height(20.dp))
 
             // Hero artwork
-            var heartPop by remember { mutableStateOf(false) }
-            val heartScale by animateFloatAsState(
-                targetValue = if (heartPop) 1f else 0f,
-                animationSpec = if (heartPop) spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-                else tween(durationMillis = 150),
-                label = "heartPop",
-                finishedListener = { if (heartPop) heartPop = false }
-            )
+            var heartTrigger by remember { mutableIntStateOf(0) }
+            val heartAnim = remember { Animatable(0f) }
+            LaunchedEffect(heartTrigger) {
+                if (heartTrigger == 0) return@LaunchedEffect
+                heartAnim.snapTo(0f)
+                heartAnim.animateTo(1f, animationSpec = tween(680, easing = FastOutSlowInEasing))
+            }
             var artworkVisible by remember(current.id) { mutableStateOf(false) }
             val artworkScale by animateFloatAsState(
                 targetValue = if (artworkVisible) 1f else 0.88f,
@@ -197,7 +199,7 @@ fun NowPlayingScreen(
                         detectTapGestures(
                             onDoubleTap = {
                                 if (!current.isFavorite) viewModel.toggleFavorite(current)
-                                heartPop = true
+                                heartTrigger++
                             }
                         )
                     }
@@ -208,18 +210,34 @@ fun NowPlayingScreen(
                     cornerRadius = 20.dp,
                     modifier = Modifier.fillMaxSize()
                 )
-                if (heartScale > 0f) {
+                val hp = heartAnim.value
+                if (hp > 0f && hp < 1f) {
+                    // Expanding ring that ripples outward and fades.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size((80 + 150 * hp).dp)
+                            .border(2.dp, Color.White.copy(alpha = (1f - hp) * 0.5f), CircleShape)
+                    )
+                    // Heart: overshoot pop, then drift up and fade out.
+                    val scale = when {
+                        hp < 0.4f -> 0.4f + (1.25f - 0.4f) * (hp / 0.4f)
+                        hp < 0.6f -> 1.25f + (1f - 1.25f) * ((hp - 0.4f) / 0.2f)
+                        else -> 1f
+                    }
+                    val heartAlpha = if (hp < 0.7f) 1f else (1f - (hp - 0.7f) / 0.3f).coerceIn(0f, 1f)
                     Icon(
                         imageVector = Icons.Filled.Favorite,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .size(110.dp)
+                            .size(120.dp)
                             .graphicsLayer {
-                                scaleX = heartScale
-                                scaleY = heartScale
-                                alpha = heartScale
+                                scaleX = scale
+                                scaleY = scale
+                                alpha = heartAlpha
+                                translationY = -70f * hp
                             }
                     )
                 }
@@ -227,7 +245,11 @@ fun NowPlayingScreen(
 
             if (visualizerEnabled) {
                 Spacer(Modifier.height(14.dp))
-                VisualizerView(bars = viewModel.visualizer.bars, modifier = Modifier.fillMaxWidth())
+                VisualizerView(
+                    bars = viewModel.visualizer.bars,
+                    pulse = viewModel.visualizer.pulse,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(Modifier.height(28.dp))

@@ -179,7 +179,7 @@ private fun SimpleEqControls(eq: EqualizerController) {
             )
         }
         Spacer(Modifier.height(4.dp))
-        ResetPill(onClick = { eq.resetBands() })
+        ResetPill(label = "Reset to flat", onClick = { eq.resetBands() })
     }
 }
 
@@ -224,7 +224,7 @@ private fun SimpleBandSlider(
 }
 
 @Composable
-private fun ResetPill(onClick: () -> Unit) {
+private fun ResetPill(label: String, onClick: () -> Unit) {
     val shape = RoundedCornerShape(percent = 50)
     Box(
         modifier = Modifier
@@ -235,7 +235,7 @@ private fun ResetPill(onClick: () -> Unit) {
             .padding(horizontal = 18.dp, vertical = 10.dp)
     ) {
         Text(
-            "Reset to flat",
+            label,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -315,6 +315,10 @@ private fun AdvancedEqControls(eq: EqualizerController) {
             )
         }
     }
+
+    Spacer(Modifier.height(20.dp))
+    ResetPill(label = "Reset bands", onClick = { eq.resetBands() })
+    Spacer(Modifier.height(8.dp))
 }
 
 private fun SimpleBand.displayName(): String = when (this) {

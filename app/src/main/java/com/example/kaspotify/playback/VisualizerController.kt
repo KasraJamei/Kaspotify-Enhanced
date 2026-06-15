@@ -30,6 +30,12 @@ class VisualizerController @Inject constructor() {
     private val _bars = MutableStateFlow(FloatArray(NUM_BARS))
     val bars: StateFlow<FloatArray> = _bars.asStateFlow()
 
+    // A 0..1 "beat" signal: how much the current bass exceeds its recent baseline. Spikes on kicks
+    // and beats; the UI uses it to pump the whole spectrum so it visibly waves with the bass.
+    private val _pulse = MutableStateFlow(0f)
+    val pulse: StateFlow<Float> = _pulse.asStateFlow()
+    private var bassBaseline = 0f
+
     // Precomputed log-spaced band edges over the usable FFT bins.
     private val bandEdges: IntArray = buildBandEdges()
 
@@ -114,7 +120,21 @@ class VisualizerController @Inject constructor() {
             smoothed[b] = s
             out[b] = s
         }
+        updatePulse(out)
         return out
+    }
+
+    /** Derive the beat pulse from how far the current bass sits above its slow-moving baseline. */
+    private fun updatePulse(levels: FloatArray) {
+        var bass = 0f
+        val n = BASS_BANDS.coerceAtMost(levels.size)
+        for (i in 0 until n) bass += levels[i]
+        bass = if (n > 0) bass / n else 0f
+        // Slow baseline so sustained bass doesn't keep the pump maxed; only transients stand out.
+        bassBaseline += (bass - bassBaseline) * BASELINE_EMA
+        val excess = ((bass - bassBaseline) * PULSE_GAIN).coerceIn(0f, 1f)
+        // Fast attack, gentle inter-frame decay, so each beat reads as a distinct pump.
+        _pulse.value = if (excess > _pulse.value) excess else _pulse.value * PULSE_DECAY
     }
 
     private fun buildBandEdges(): IntArray {
@@ -160,7 +180,9 @@ class VisualizerController @Inject constructor() {
         _available.value = false
         _enabled.value = false
         _bars.value = FloatArray(NUM_BARS)
+        _pulse.value = 0f
         smoothed.fill(0f)
+        bassBaseline = 0f
     }
 
     companion object {
@@ -169,10 +191,16 @@ class VisualizerController @Inject constructor() {
         private const val CAPTURE_SIZE = 1024
         // ln(1 + maxMagnitude) reference; max byte magnitude ~ hypot(127,127) ≈ 180.
         private val LOG_REF = ln(1f + 180f)
-        // How much the lowest band is attenuated relative to the top (0..1). 0.55 ≈ -45% on the bass.
-        private const val BASS_TILT = 0.55f
+        // How much the lowest band is attenuated relative to the top (0..1). 0.8 keeps the bass
+        // present and lively (the DC-bin skip + EMA already handle the old "twitching").
+        private const val BASS_TILT = 0.8f
         // EMA factors applied to incoming targets (per capture frame, ~30/s).
-        private const val SMOOTH_RISE = 0.55f
+        private const val SMOOTH_RISE = 0.6f
         private const val SMOOTH_FALL = 0.35f
+        // Beat-pulse tuning.
+        private const val BASS_BANDS = 4          // lowest bands averaged into the "bass" measure
+        private const val BASELINE_EMA = 0.04f    // how fast the bass baseline tracks the average
+        private const val PULSE_GAIN = 3.2f       // sensitivity of the pump to bass transients
+        private const val PULSE_DECAY = 0.86f     // per-frame falloff of the pump between beats
     }
 }

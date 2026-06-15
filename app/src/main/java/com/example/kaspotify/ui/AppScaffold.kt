@@ -45,16 +45,16 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,6 +94,9 @@ private val overlayEnter = slideInVertically(
 ) + fadeIn(tween(200))
 private val overlayExit = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150))
 
+/** How long an action toast stays on screen before auto-dismissing. */
+private const val NOTIFICATION_MS = 1400L
+
 @Composable
 fun AppScaffold(viewModel: MusicViewModel) {
     var selectedTab by remember { mutableStateOf(Tab.LIBRARY) }
@@ -114,12 +117,22 @@ fun AppScaffold(viewModel: MusicViewModel) {
 
     val onMore: (Song) -> Unit = { moreSong = it }
 
-    // Transient in-app action confirmations.
-    val snackbarHostState = remember { SnackbarHostState() }
+    // Transient in-app action confirmations — a short, self-dismissing glass toast. Custom (instead
+    // of a Snackbar) so we control the duration: a quick ~1.4s flash, not the ~4s Snackbar default.
+    var toastText by remember { mutableStateOf("") }
+    var toastVisible by remember { mutableStateOf(false) }
+    var toastSeq by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message ->
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(message)
+            toastText = message
+            toastVisible = true
+            toastSeq++
+        }
+    }
+    LaunchedEffect(toastSeq) {
+        if (toastVisible) {
+            delay(NOTIFICATION_MS)
+            toastVisible = false
         }
     }
 
@@ -278,16 +291,18 @@ fun AppScaffold(viewModel: MusicViewModel) {
             QualityScreen(viewModel = viewModel, onBack = { showQuality = false }, onMore = onMore)
         }
 
-        // Snackbar lives at the very top of the stack so action confirmations are visible even when
-        // the full-screen Now Playing / Equalizer overlays are open.
-        SnackbarHost(
-            hostState = snackbarHostState,
+        // Toast lives at the very top of the stack so confirmations are visible even when the
+        // full-screen Now Playing / Equalizer overlays are open.
+        AnimatedVisibility(
+            visible = toastVisible,
+            enter = fadeIn(tween(140)) + slideInVertically { it / 2 },
+            exit = fadeOut(tween(200)) + slideOutVertically { it / 2 },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 12.dp)
-        ) { data ->
-            GlassSnackbar(data.visuals.message)
+        ) {
+            GlassSnackbar(toastText)
         }
     }
 

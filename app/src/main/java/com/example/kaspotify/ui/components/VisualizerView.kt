@@ -7,6 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -28,12 +29,16 @@ import kotlin.math.exp
 @Composable
 fun VisualizerView(
     bars: StateFlow<FloatArray>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    pulse: StateFlow<Float>? = null
 ) {
     val color = MaterialTheme.colorScheme.primary
     // Displayed levels; updated every frame, which redraws the Canvas. We read the StateFlow's
     // current value directly in the frame loop so incoming bar frames never trigger recomposition.
     var levels by remember { mutableStateOf(FloatArray(1)) }
+    // Smoothed beat pump (0..1): scales every bar up briefly on each beat so the whole bar field
+    // visibly waves with the bass.
+    var pump by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(Unit) {
         var last = 0L
@@ -57,6 +62,9 @@ fun VisualizerView(
                     }
                 }
                 levels = next
+                // Ease the pump toward the controller's beat signal (snappy up, smooth down).
+                val target = pulse?.value ?: 0f
+                pump = if (target > pump) target else pump + (target - pump) * (1f - exp(-dt * PUMP_DECAY))
             }
         }
     }
@@ -74,8 +82,9 @@ fun VisualizerView(
         val radius = CornerRadius(barWidth / 2, barWidth / 2)
         val maxH = size.height
         val minH = barWidth // keep a little dot even when silent
+        val boost = 1f + pump * PUMP_AMOUNT
         for (i in 0 until n) {
-            val level = arr[i].coerceIn(0f, 1f)
+            val level = (arr[i] * boost).coerceIn(0f, 1f)
             val h = (minH + level * (maxH - minH)).coerceAtMost(maxH)
             val x = i * slot + (slot - barWidth) / 2f
             val top = maxH - h
@@ -95,3 +104,5 @@ fun VisualizerView(
 
 private const val ATTACK = 22f // higher = snappier rise
 private const val DECAY = 1.4f // units per second the bars fall
+private const val PUMP_AMOUNT = 0.45f // how much a full beat scales the bars up
+private const val PUMP_DECAY = 6f // how fast the pump eases back down between beats
