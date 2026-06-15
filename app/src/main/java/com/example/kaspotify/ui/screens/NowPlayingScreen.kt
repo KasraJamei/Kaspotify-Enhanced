@@ -390,8 +390,42 @@ fun NowPlayingScreen(
 
             Spacer(Modifier.height(10.dp))
         }
+
+        // Vertical "KASPOTIFY" wordmark down the left edge — a quiet, on-brand signature that
+        // fades in letter-by-letter when the screen opens.
+        KaspotifyWordmark(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 6.dp)
+        )
     }
 }
+
+@Composable
+private fun KaspotifyWordmark(modifier: Modifier = Modifier) {
+    var started by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { started = true }
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        WORDMARK.forEachIndexed { i, ch ->
+            val alpha by animateFloatAsState(
+                targetValue = if (started) 1f else 0f,
+                animationSpec = tween(durationMillis = 450, delayMillis = 300 + i * 55),
+                label = "wordmark"
+            )
+            Text(
+                text = ch.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f * alpha)
+            )
+        }
+    }
+}
+
+private const val WORDMARK = "KASPOTIFY"
 
 @Composable
 private fun ActionChip(

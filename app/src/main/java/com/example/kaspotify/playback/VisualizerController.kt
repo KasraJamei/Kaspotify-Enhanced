@@ -33,6 +33,10 @@ class VisualizerController @Inject constructor() {
     // Precomputed log-spaced band edges over the usable FFT bins.
     private val bandEdges: IntArray = buildBandEdges()
 
+    // Per-band exponential moving average, to denoise targets before the UI animates them. The very
+    // low bands are single-bin and naturally flicker; this keeps the left side from "twitching".
+    private val smoothed = FloatArray(NUM_BARS)
+
     fun attach(audioSessionId: Int) {
         if (audioSessionId == 0) return
         sessionId = audioSessionId
@@ -94,15 +98,30 @@ class VisualizerController @Inject constructor() {
             }
             val avg = if (count > 0) sum / count else 0f
             // Perceptual (roughly log) scaling + gentle gain so quiet detail is still visible.
-            val norm = (ln(1f + avg) / LOG_REF).coerceIn(0f, 1f)
-            out[b] = norm.pow(0.85f)
+            var norm = (ln(1f + avg) / LOG_REF).coerceIn(0f, 1f).pow(0.85f)
+            // Spectral tilt: bass is far louder than the rest and visually dominates, so ease the
+            // lowest bands down toward a flatter, calmer response.
+            val tilt = BASS_TILT + (1f - BASS_TILT) * (b.toFloat() / (NUM_BARS - 1))
+            norm *= tilt
+            // Temporal EMA — denoises the jittery low bins before the UI's attack/decay sees them.
+            val prev = smoothed[b]
+            val s = if (norm >= prev) {
+                // Rise responsively but not instantly.
+                prev + (norm - prev) * SMOOTH_RISE
+            } else {
+                prev + (norm - prev) * SMOOTH_FALL
+            }
+            smoothed[b] = s
+            out[b] = s
         }
         return out
     }
 
     private fun buildBandEdges(): IntArray {
         val bins = CAPTURE_SIZE / 2
-        val lowK = 1
+        // Skip the lowest couple of bins (DC offset / sub-bass rumble) — they're the worst offenders
+        // for the "twitching" leftmost bars and carry little musical information.
+        val lowK = 3
         val highK = bins - 1
         val edges = IntArray(NUM_BARS + 1)
         for (i in 0..NUM_BARS) {
@@ -141,12 +160,19 @@ class VisualizerController @Inject constructor() {
         _available.value = false
         _enabled.value = false
         _bars.value = FloatArray(NUM_BARS)
+        smoothed.fill(0f)
     }
 
     companion object {
         const val NUM_BARS = 32
-        private const val CAPTURE_SIZE = 512
+        // Larger capture = more FFT bins = finer, less-noisy low/mid resolution.
+        private const val CAPTURE_SIZE = 1024
         // ln(1 + maxMagnitude) reference; max byte magnitude ~ hypot(127,127) ≈ 180.
         private val LOG_REF = ln(1f + 180f)
+        // How much the lowest band is attenuated relative to the top (0..1). 0.55 ≈ -45% on the bass.
+        private const val BASS_TILT = 0.55f
+        // EMA factors applied to incoming targets (per capture frame, ~30/s).
+        private const val SMOOTH_RISE = 0.55f
+        private const val SMOOTH_FALL = 0.35f
     }
 }

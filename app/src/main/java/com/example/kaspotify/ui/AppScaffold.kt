@@ -130,11 +130,6 @@ fun AppScaffold(viewModel: MusicViewModel) {
         Scaffold(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets.statusBars,
-            snackbarHost = {
-                SnackbarHost(snackbarHostState) { data ->
-                    GlassSnackbar(data.visuals.message)
-                }
-            },
             bottomBar = {
                 // Floating mini-player + glass nav bar, pinned above system insets.
                 Column(
@@ -281,6 +276,18 @@ fun AppScaffold(viewModel: MusicViewModel) {
         AnimatedVisibility(visible = showQuality, enter = overlayEnter, exit = overlayExit) {
             BackHandler(enabled = showQuality) { showQuality = false }
             QualityScreen(viewModel = viewModel, onBack = { showQuality = false }, onMore = onMore)
+        }
+
+        // Snackbar lives at the very top of the stack so action confirmations are visible even when
+        // the full-screen Now Playing / Equalizer overlays are open.
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp)
+        ) { data ->
+            GlassSnackbar(data.visuals.message)
         }
     }
 

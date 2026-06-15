@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -75,7 +76,15 @@ class MusicViewModel @Inject constructor(
             .asState(emptyMap())
 
     // Playback state surfaced from the controller.
-    val currentSong: StateFlow<Song?> get() = player.currentSong
+    /**
+     * The playing track, with its favorite flag kept live from Room. The PlayerController captures a
+     * song's `isFavorite` when it's enqueued, so liking/unliking from Now Playing wouldn't otherwise
+     * recolor the heart — we merge the current favorite set in here so the UI stays correct.
+     */
+    val currentSong: StateFlow<Song?> =
+        combine(player.currentSong, repository.favoriteIds) { song, favIds ->
+            song?.copy(isFavorite = song.id in favIds)
+        }.asState(null)
     val isPlaying: StateFlow<Boolean> get() = player.isPlaying
     val positionMs: StateFlow<Long> get() = player.positionMs
     val durationMs: StateFlow<Long> get() = player.durationMs

@@ -29,6 +29,9 @@ class MusicRepository @Inject constructor(
     /** Raw scanned songs with no Room state merged in. */
     val rawSongs: Flow<List<Song>> = scannedSongs.asStateFlow()
 
+    /** Live set of favorited song ids — used to keep the now-playing favorite state fresh. */
+    val favoriteIds: Flow<Set<Long>> = dao.favoriteIds().map { it.toHashSet() }
+
     /** Songs with favorite state merged from Room. */
     val songs: Flow<List<Song>> =
         combine(scannedSongs, dao.favoriteIds()) { list, favoriteIds ->
