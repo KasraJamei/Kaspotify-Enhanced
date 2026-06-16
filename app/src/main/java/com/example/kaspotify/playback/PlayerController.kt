@@ -2,6 +2,7 @@ package com.example.kaspotify.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
@@ -12,22 +13,40 @@ import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.kaspotify.data.model.Song
+import com.example.kaspotify.data.settings.SettingsRepository
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class RepeatMode { OFF, ALL, ONE }
 
+/** Hearing-safety prompts surfaced to the UI. */
+enum class SafetyEvent { HIGH_VOLUME, TAKE_A_BREAK }
+
 /** Single UI-facing entry point to playback. Connects to [PlaybackService] via a MediaController. */
 @Singleton
 class PlayerController @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val settingsRepository: SettingsRepository
 ) {
+
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    private val _safetyEvents = MutableSharedFlow<SafetyEvent>(extraBufferCapacity = 2)
+    val safetyEvents: SharedFlow<SafetyEvent> = _safetyEvents.asSharedFlow()
+
+    // Hearing-safety bookkeeping.
+    private var continuousPlayMs = 0L
+    private var remindedThisSession = false
+    private var warnedThisSession = false
 
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
@@ -74,7 +93,10 @@ class PlayerController @Inject constructor(
                 val duration = it.duration
                 _durationMs.value = if (duration > 0) duration else 0L
             }
-            if (_isPlaying.value) handler.postDelayed(this, POLL_INTERVAL_MS)
+            if (_isPlaying.value) {
+                accrueListeningTime(POLL_INTERVAL_MS)
+                handler.postDelayed(this, POLL_INTERVAL_MS)
+            }
         }
     }
 
@@ -84,6 +106,11 @@ class PlayerController @Inject constructor(
             if (isPlaying) {
                 handler.removeCallbacks(positionPoller)
                 handler.post(positionPoller)
+                maybeWarnHighVolume()
+            } else {
+                // A pause counts as a break: reset the continuous-listening accumulator.
+                continuousPlayMs = 0L
+                remindedThisSession = false
             }
         }
 
@@ -92,6 +119,7 @@ class PlayerController @Inject constructor(
             _durationMs.value = (controller?.duration ?: 0L).coerceAtLeast(0L)
             _positionMs.value = 0L
             _queueIndex.value = controller?.currentMediaItemIndex ?: 0
+            maybeWarnHighVolume()
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -122,8 +150,40 @@ class PlayerController @Inject constructor(
                 _playbackSpeed.value = c.playbackParameters.speed
                 syncCurrentSong()
                 syncQueue()
+                applyVolumeCap()
             }
         }, MoreExecutors.directExecutor())
+    }
+
+    /** Applies (or clears) the hearing-safety output ceiling on the ExoPlayer volume. */
+    fun applyVolumeCap() {
+        val c = controller ?: return
+        val s = settingsRepository.settings.value
+        c.volume = if (s.maxVolumeCap) (s.maxVolumePercent / 100f).coerceIn(0.1f, 1f) else 1f
+    }
+
+    private fun accrueListeningTime(deltaMs: Long) {
+        if (!settingsRepository.settings.value.listeningTimeReminder) return
+        continuousPlayMs += deltaMs
+        if (!remindedThisSession && continuousPlayMs >= BREAK_REMINDER_MS) {
+            remindedThisSession = true
+            _safetyEvents.tryEmit(SafetyEvent.TAKE_A_BREAK)
+        }
+    }
+
+    private fun maybeWarnHighVolume() {
+        if (!settingsRepository.settings.value.highVolumeWarning) return
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).takeIf { it > 0 } ?: return
+        val fraction = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
+        if (fraction >= HIGH_VOLUME_FRACTION) {
+            if (!warnedThisSession) {
+                warnedThisSession = true
+                _safetyEvents.tryEmit(SafetyEvent.HIGH_VOLUME)
+            }
+        } else {
+            // Dropped to a safe level — allow warning again if they crank it back up.
+            warnedThisSession = false
+        }
     }
 
     fun release() {
@@ -281,5 +341,9 @@ class PlayerController @Inject constructor(
 
     companion object {
         private const val POLL_INTERVAL_MS = 500L
+        /** Suggest a break after this much continuous playback. */
+        private const val BREAK_REMINDER_MS = 60L * 60 * 1000
+        /** System music-volume fraction considered "loud" for the safety warning. */
+        private const val HIGH_VOLUME_FRACTION = 0.8f
     }
 }

@@ -88,6 +88,40 @@ class MediaStoreImporter @Inject constructor(
         songs
     }
 
+    /**
+     * Reads genre tags already embedded in the library via MediaStore's genre tables, returning a
+     * songId → genre-name map. Songs whose files carry no genre tag simply won't appear here.
+     */
+    suspend fun scanGenres(): Map<Long, String> = withContext(Dispatchers.IO) {
+        val result = HashMap<Long, String>()
+        val genresUri = MediaStore.Audio.Genres.EXTERNAL_CONTENT_URI
+        context.contentResolver.query(
+            genresUri,
+            arrayOf(MediaStore.Audio.Genres._ID, MediaStore.Audio.Genres.NAME),
+            null, null, null
+        )?.use { gc ->
+            val idCol = gc.getColumnIndexOrThrow(MediaStore.Audio.Genres._ID)
+            val nameCol = gc.getColumnIndexOrThrow(MediaStore.Audio.Genres.NAME)
+            while (gc.moveToNext()) {
+                val genreId = gc.getLong(idCol)
+                val name = gc.getString(nameCol)?.trim().orEmpty()
+                if (name.isEmpty()) continue
+                val membersUri = MediaStore.Audio.Genres.Members.getContentUri("external", genreId)
+                context.contentResolver.query(
+                    membersUri,
+                    arrayOf(MediaStore.Audio.Genres.Members.AUDIO_ID),
+                    null, null, null
+                )?.use { mc ->
+                    val audioCol = mc.getColumnIndexOrThrow(MediaStore.Audio.Genres.Members.AUDIO_ID)
+                    while (mc.moveToNext()) {
+                        result[mc.getLong(audioCol)] = name
+                    }
+                }
+            }
+        }
+        result
+    }
+
     fun deriveAlbums(songs: List<Song>): List<Album> =
         songs.groupBy { it.albumId }
             .map { (albumId, albumSongs) ->

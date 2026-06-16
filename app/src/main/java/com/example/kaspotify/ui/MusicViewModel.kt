@@ -10,11 +10,15 @@ import com.example.kaspotify.data.model.Song
 import com.example.kaspotify.data.repository.MusicRepository
 import com.example.kaspotify.data.settings.AppSettings
 import com.example.kaspotify.data.settings.SettingsRepository
+import com.example.kaspotify.data.update.ReleaseInfo
+import com.example.kaspotify.data.update.UpdateChecker
 import com.example.kaspotify.playback.EqualizerController
+import com.example.kaspotify.playback.LoudnessController
 import com.example.kaspotify.playback.PlayerController
 import com.example.kaspotify.playback.RepeatMode
 import com.example.kaspotify.playback.ReverbController
 import com.example.kaspotify.playback.ReverbPreset
+import com.example.kaspotify.playback.SafetyEvent
 import com.example.kaspotify.playback.VisualizerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -38,14 +42,33 @@ enum class ToastKind { GENERIC, QUEUE, PLAY_NEXT, LIKE, UNLIKE, PLAYLIST, TIMER 
 /** A transient in-app confirmation: its text plus a [ToastKind] that selects the icon. */
 data class ToastEvent(val text: String, val kind: ToastKind = ToastKind.GENERIC)
 
+/** State of the non-forced in-app update check. */
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data object UpToDate : UpdateState
+    data class Available(val release: ReleaseInfo) : UpdateState
+    data object Downloading : UpdateState
+    data class Error(val message: String) : UpdateState
+}
+
+/** State of the patch-notes (all releases) screen. */
+sealed interface PatchNotesState {
+    data object Loading : PatchNotesState
+    data class Loaded(val releases: List<ReleaseInfo>) : PatchNotesState
+    data class Error(val message: String) : PatchNotesState
+}
+
 @HiltViewModel
 class MusicViewModel @Inject constructor(
     private val repository: MusicRepository,
     private val settingsRepository: SettingsRepository,
+    private val updateChecker: UpdateChecker,
     val player: PlayerController,
     val equalizer: EqualizerController,
     val visualizer: VisualizerController,
-    val reverb: ReverbController
+    val reverb: ReverbController,
+    private val loudness: LoudnessController
 ) : ViewModel() {
 
     // ---- Settings / feature toggles ----
@@ -58,8 +81,25 @@ class MusicViewModel @Inject constructor(
     fun setAudioEffects(v: Boolean) = settingsRepository.setAudioEffects(v)
     fun setVisualizerAvailable(v: Boolean) = settingsRepository.setVisualizer(v)
     fun setShowQualityBadges(v: Boolean) = settingsRepository.setShowQualityBadges(v)
+    fun setVolumeNormalization(v: Boolean) {
+        settingsRepository.setVolumeNormalization(v)
+        loudness.setEnabled(v)
+    }
+    fun setHighVolumeWarning(v: Boolean) = settingsRepository.setHighVolumeWarning(v)
+    fun setListeningTimeReminder(v: Boolean) = settingsRepository.setListeningTimeReminder(v)
+    fun setMaxVolumeCap(v: Boolean) {
+        settingsRepository.setMaxVolumeCap(v)
+        player.applyVolumeCap()
+    }
+    fun setMaxVolumePercent(percent: Int) {
+        settingsRepository.setMaxVolumePercent(percent)
+        player.applyVolumeCap()
+    }
     fun setOnboardingSeen(v: Boolean) = settingsRepository.setOnboardingSeen(v)
     fun setTourSeen(v: Boolean) = settingsRepository.setTourSeen(v)
+
+    /** Hearing-safety prompts (high volume / take a break) surfaced from the player. */
+    val safetyEvents: SharedFlow<SafetyEvent> = player.safetyEvents
 
     fun songsForAlbum(albumId: Long): List<Song> =
         songs.value.filter { it.albumId == albumId }
@@ -121,6 +161,78 @@ class MusicViewModel @Inject constructor(
                 .distinctUntilChangedBy { it?.id }
                 .collect { song -> song?.let { repository.recordPlay(it) } }
         }
+        // Apply the saved volume-normalization preference (the effect re-applies it on attach too).
+        loudness.setEnabled(settingsRepository.settings.value.volumeNormalization)
+        // Best-effort, non-forced update check at launch; quietly nudges via a toast if newer.
+        viewModelScope.launch {
+            val release = runCatching { updateChecker.findUpdate() }.getOrNull() ?: return@launch
+            _updateState.value = UpdateState.Available(release)
+            notify("Update ${release.tag} available — open Settings")
+        }
+    }
+
+    // ---- Updates & patch notes ----
+
+    val currentVersion: String get() = updateChecker.currentVersion()
+
+    private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
+
+    fun checkForUpdate() = viewModelScope.launch {
+        _updateState.value = UpdateState.Checking
+        _updateState.value = try {
+            updateChecker.findUpdate()?.let { UpdateState.Available(it) } ?: UpdateState.UpToDate
+        } catch (e: Exception) {
+            UpdateState.Error("Couldn't check for updates")
+        }
+    }
+
+    fun downloadUpdate() {
+        val state = _updateState.value
+        if (state is UpdateState.Available) {
+            if (updateChecker.downloadAndInstall(state.release)) {
+                _updateState.value = UpdateState.Downloading
+                notify("Downloading ${state.release.tag}…")
+            } else {
+                notify("That release has no installable file")
+            }
+        }
+    }
+
+    private val _patchNotes = MutableStateFlow<PatchNotesState>(PatchNotesState.Loading)
+    val patchNotes: StateFlow<PatchNotesState> = _patchNotes.asStateFlow()
+
+    fun loadPatchNotes() = viewModelScope.launch {
+        _patchNotes.value = PatchNotesState.Loading
+        _patchNotes.value = try {
+            PatchNotesState.Loaded(updateChecker.fetchReleases())
+        } catch (e: Exception) {
+            PatchNotesState.Error("Couldn't load patch notes. Check your connection.")
+        }
+    }
+
+    // ---- Genre auto-playlists ("AI" grouping) ----
+
+    private val _genreBuilding = MutableStateFlow(false)
+    val genreBuilding: StateFlow<Boolean> = _genreBuilding.asStateFlow()
+
+    private val _genreProgress = MutableStateFlow(0f)
+    val genreProgress: StateFlow<Float> = _genreProgress.asStateFlow()
+
+    fun buildGenrePlaylists() = viewModelScope.launch {
+        if (_genreBuilding.value) return@launch
+        _genreBuilding.value = true
+        _genreProgress.value = 0f
+        val count = runCatching {
+            repository.buildGenrePlaylists { done, total ->
+                _genreProgress.value = if (total > 0) done.toFloat() / total else 1f
+            }
+        }.getOrDefault(0)
+        _genreBuilding.value = false
+        notify(
+            if (count > 0) "Created $count genre playlist${if (count == 1) "" else "s"}"
+            else "No genres found to group"
+        )
     }
 
     fun refreshLibrary() = viewModelScope.launch { repository.refreshLibrary() }

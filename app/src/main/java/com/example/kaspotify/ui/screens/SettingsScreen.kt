@@ -18,18 +18,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Swipe
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TipsAndUpdates
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -45,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaspotify.ui.MusicViewModel
+import com.example.kaspotify.ui.UpdateState
 import com.example.kaspotify.ui.theme.GlassFill
 import com.example.kaspotify.ui.theme.GlassStroke
 
@@ -53,9 +65,13 @@ fun SettingsScreen(
     viewModel: MusicViewModel,
     onBack: () -> Unit,
     onReplayTour: () -> Unit,
+    onOpenPatchNotes: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val genreBuilding by viewModel.genreBuilding.collectAsStateWithLifecycle()
+    val genreProgress by viewModel.genreProgress.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val version = remember {
         runCatching {
@@ -113,6 +129,13 @@ fun SettingsScreen(
             checked = settings.audioEffects,
             onChange = viewModel::setAudioEffects
         )
+        SettingToggle(
+            icon = Icons.AutoMirrored.Filled.VolumeUp,
+            title = "Volume normalization",
+            subtitle = "Even out loudness so quiet tracks aren't too soft",
+            checked = settings.volumeNormalization,
+            onChange = viewModel::setVolumeNormalization
+        )
 
         SettingToggle(
             icon = Icons.Filled.HighQuality,
@@ -121,6 +144,43 @@ fun SettingsScreen(
             checked = settings.showQualityBadges,
             onChange = viewModel::setShowQualityBadges
         )
+
+        SectionLabel("Hearing safety")
+        SettingToggle(
+            icon = Icons.Filled.Warning,
+            title = "High-volume warning",
+            subtitle = "Warn when output reaches a potentially harmful level",
+            checked = settings.highVolumeWarning,
+            onChange = viewModel::setHighVolumeWarning
+        )
+        SettingToggle(
+            icon = Icons.Filled.Timer,
+            title = "Listening-time reminder",
+            subtitle = "Suggest a break after an hour of continuous play",
+            checked = settings.listeningTimeReminder,
+            onChange = viewModel::setListeningTimeReminder
+        )
+        SettingToggle(
+            icon = Icons.Filled.Hearing,
+            title = "Max-volume cap",
+            subtitle = "Limit output to a safer ceiling",
+            checked = settings.maxVolumeCap,
+            onChange = viewModel::setMaxVolumeCap
+        )
+        if (settings.maxVolumeCap) {
+            Column(modifier = Modifier.padding(start = 68.dp, end = 20.dp, bottom = 8.dp)) {
+                Text(
+                    "Ceiling: ${settings.maxVolumePercent}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Slider(
+                    value = settings.maxVolumePercent.toFloat(),
+                    onValueChange = { viewModel.setMaxVolumePercent(it.toInt()) },
+                    valueRange = 20f..100f
+                )
+            }
+        }
 
         SectionLabel("Interaction")
         SettingToggle(
@@ -136,6 +196,57 @@ fun SettingsScreen(
             subtitle = "Brief confirmations when you like, queue, or add songs",
             checked = settings.inAppToasts,
             onChange = viewModel::setInAppToasts
+        )
+
+        SectionLabel("Library")
+        GuideRow(
+            icon = Icons.Filled.AutoAwesome,
+            title = "Group songs by genre",
+            subtitle = if (genreBuilding) "Finding genres… ${(genreProgress * 100).toInt()}%"
+            else "Scan your library and build a playlist per genre",
+            onClick = { if (!genreBuilding) viewModel.buildGenrePlaylists() }
+        )
+        if (genreBuilding) {
+            LinearProgressIndicator(
+                progress = { genreProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        SectionLabel("Updates")
+        val update = updateState
+        val statusLine = when (update) {
+            is UpdateState.Checking -> "Checking…"
+            is UpdateState.UpToDate -> "You're on the latest version"
+            is UpdateState.Available -> "Update ${update.release.tag} available"
+            is UpdateState.Downloading -> "Downloading… check your notifications"
+            is UpdateState.Error -> update.message
+            else -> "Tap to check for updates"
+        }
+        GuideRow(
+            icon = Icons.Filled.SystemUpdate,
+            title = "Check for updates",
+            subtitle = "v$version • $statusLine",
+            onClick = { viewModel.checkForUpdate() }
+        )
+        if (update is UpdateState.Available) {
+            Button(
+                onClick = { viewModel.downloadUpdate() },
+                modifier = Modifier.padding(start = 68.dp, top = 2.dp, bottom = 4.dp)
+            ) {
+                Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.size(8.dp))
+                Text("Download & install ${update.release.tag}")
+            }
+        }
+        GuideRow(
+            icon = Icons.Filled.NewReleases,
+            title = "What's new",
+            subtitle = "Patch notes for every release",
+            onClick = onOpenPatchNotes
         )
 
         SectionLabel("Guide")

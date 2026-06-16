@@ -5,15 +5,18 @@ import com.example.kaspotify.data.local.PlaylistEntity
 import com.example.kaspotify.data.local.PlaylistSongCrossRef
 import com.example.kaspotify.data.local.SearchHistoryEntity
 import com.example.kaspotify.data.local.SongStateEntity
+import com.example.kaspotify.data.media.GenreClassifier
 import com.example.kaspotify.data.media.MediaStoreImporter
 import com.example.kaspotify.data.model.Album
 import com.example.kaspotify.data.model.Artist
 import com.example.kaspotify.data.model.Playlist
 import com.example.kaspotify.data.model.Song
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -23,6 +26,7 @@ import javax.inject.Singleton
 @Singleton
 class MusicRepository @Inject constructor(
     private val importer: MediaStoreImporter,
+    private val genreClassifier: GenreClassifier,
     private val dao: MusicDao
 ) {
 
@@ -183,6 +187,54 @@ class MusicRepository @Inject constructor(
         return id
     }
 
+    // ---- Genre auto-playlists ("AI" genre grouping) ----
+
+    /**
+     * Scans the library, resolves each song's genre (embedded MediaStore tag first, then an online
+     * lookup by name for untagged tracks, capped to keep it quick), groups them, and (re)creates a
+     * smart playlist per genre with enough songs. [onProgress] reports (done, total) over the slow
+     * online-lookup phase. Returns the number of genre playlists created.
+     */
+    suspend fun buildGenrePlaylists(onProgress: (Int, Int) -> Unit): Int {
+        val library = scannedSongs.value
+        if (library.isEmpty()) return 0
+
+        val genreOf = HashMap<Long, String>()
+        importer.scanGenres().forEach { (id, g) -> genreOf[id] = normalizeGenre(g) }
+
+        // Untagged songs → online lookup, capped so a huge library doesn't hammer the network.
+        val untagged = library.filter { it.id !in genreOf }.take(MAX_ONLINE_LOOKUPS)
+        untagged.forEachIndexed { index, song ->
+            onProgress(index, untagged.size)
+            genreClassifier.lookupGenre(song.artist, song.title)?.let {
+                genreOf[song.id] = normalizeGenre(it)
+            }
+            delay(120) // be polite to the lookup service
+        }
+        onProgress(untagged.size, untagged.size)
+
+        val byGenre = library.groupBy { genreOf[it.id] }
+            .filterKeys { !it.isNullOrEmpty() }
+            .mapKeys { it.key!! }
+            .filterValues { it.size >= MIN_SONGS_PER_GENRE }
+        if (byGenre.isEmpty()) return 0
+
+        // Replace any previous genre playlists of the same name so re-running doesn't duplicate.
+        val existing = dao.playlistsWithCounts().first().associate { it.name to it.id }
+        var created = 0
+        for ((genre, genreSongs) in byGenre) {
+            val name = "$GENRE_PREFIX$genre"
+            existing[name]?.let { dao.deletePlaylist(it) }
+            createPlaylistWith(name, genreSongs.take(MAX_SMART_PLAYLIST_SIZE))
+            created++
+        }
+        return created
+    }
+
+    private fun normalizeGenre(raw: String): String =
+        raw.trim().split(Regex("[/;,]")).first().trim()
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
     private fun orderByIds(songs: List<Song>, ids: List<Long>): List<Song> {
         val byId = songs.associateBy { it.id }
         return ids.mapNotNull { byId[it] }
@@ -191,5 +243,8 @@ class MusicRepository @Inject constructor(
     companion object {
         private const val MAX_SMART_PLAYLIST_SIZE = 100
         private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
+        private const val MAX_ONLINE_LOOKUPS = 60
+        private const val MIN_SONGS_PER_GENRE = 3
+        const val GENRE_PREFIX = "Genre · "
     }
 }

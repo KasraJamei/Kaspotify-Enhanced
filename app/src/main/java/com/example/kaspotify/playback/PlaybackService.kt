@@ -17,6 +17,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var equalizerController: EqualizerController
     @Inject lateinit var visualizerController: VisualizerController
     @Inject lateinit var reverbController: ReverbController
+    @Inject lateinit var loudnessController: LoudnessController
 
     private var mediaSession: MediaSession? = null
 
@@ -40,6 +41,7 @@ class PlaybackService : MediaSessionService() {
         equalizerController.attach(audioSessionId)
         visualizerController.attach(audioSessionId)
         reverbController.attach(audioSessionId)
+        loudnessController.attach(audioSessionId)
 
         mediaSession = MediaSession.Builder(this, player).build()
     }
@@ -58,6 +60,7 @@ class PlaybackService : MediaSessionService() {
         equalizerController.release()
         visualizerController.release()
         reverbController.release()
+        loudnessController.release()
         mediaSession?.run {
             player.release()
             release()

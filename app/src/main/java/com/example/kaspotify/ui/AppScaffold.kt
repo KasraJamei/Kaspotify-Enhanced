@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.QueuePlayNext
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -59,6 +60,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -101,7 +103,9 @@ import com.example.kaspotify.ui.screens.PlaylistsScreen
 import com.example.kaspotify.ui.screens.QualityScreen
 import com.example.kaspotify.ui.screens.QueueScreen
 import com.example.kaspotify.ui.screens.SearchScreen
+import com.example.kaspotify.ui.screens.PatchNotesScreen
 import com.example.kaspotify.ui.screens.SettingsScreen
+import com.example.kaspotify.playback.SafetyEvent
 import com.example.kaspotify.ui.screens.SmartPlaylistScreen
 import com.example.kaspotify.ui.screens.SmartPlaylistType
 import com.example.kaspotify.ui.theme.GlassFill
@@ -140,6 +144,7 @@ fun AppScaffold(viewModel: MusicViewModel) {
     var showQueue by remember { mutableStateOf(false) }
     var showQuality by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showPatchNotes by remember { mutableStateOf(false) }
     var moreSong by remember { mutableStateOf<Song?>(null) }
 
     // Only currentSong is read here (changes once per track). isPlaying/position/duration are
@@ -181,6 +186,12 @@ fun AppScaffold(viewModel: MusicViewModel) {
             delay(NOTIFICATION_MS)
             toastVisible = false
         }
+    }
+
+    // Hearing-safety prompts (shown as a proper dialog, not a fleeting toast).
+    var safetyEvent by remember { mutableStateOf<SafetyEvent?>(null) }
+    LaunchedEffect(Unit) {
+        viewModel.safetyEvents.collect { safetyEvent = it }
     }
 
     CompositionLocalProvider(LocalTour provides tour) {
@@ -361,8 +372,14 @@ fun AppScaffold(viewModel: MusicViewModel) {
                     showSettings = false
                     scope.launch { pagerState.animateScrollToPage(0) }
                     tour.start()
-                }
+                },
+                onOpenPatchNotes = { showPatchNotes = true }
             )
+        }
+
+        AnimatedVisibility(visible = showPatchNotes, enter = overlayEnter, exit = overlayExit) {
+            BackHandler(enabled = showPatchNotes) { showPatchNotes = false }
+            PatchNotesScreen(viewModel = viewModel, onBack = { showPatchNotes = false })
         }
 
         // Toast lives at the very top of the stack so confirmations are visible even when the
@@ -399,6 +416,23 @@ fun AppScaffold(viewModel: MusicViewModel) {
 
     moreSong?.let { song ->
         MoreSheet(song = song, viewModel = viewModel, onDismiss = { moreSong = null })
+    }
+
+    safetyEvent?.let { event ->
+        val (title, body) = when (event) {
+            SafetyEvent.HIGH_VOLUME ->
+                "Listening loudly" to "You're playing at a high volume. Prolonged listening at this " +
+                    "level can harm your hearing — consider turning it down."
+            SafetyEvent.TAKE_A_BREAK ->
+                "Time for a break?" to "You've been listening for a while. A short break helps protect " +
+                    "your hearing."
+        }
+        AlertDialog(
+            onDismissRequest = { safetyEvent = null },
+            confirmButton = { TextButton(onClick = { safetyEvent = null }) { Text("Got it") } },
+            title = { Text(title) },
+            text = { Text(body) }
+        )
     }
 }
 
