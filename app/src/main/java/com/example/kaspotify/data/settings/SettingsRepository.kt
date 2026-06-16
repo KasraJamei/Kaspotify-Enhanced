@@ -29,6 +29,8 @@ data class AppSettings(
     val maxVolumeCap: Boolean = false,
     /** Output ceiling (percent) used when [maxVolumeCap] is on. */
     val maxVolumePercent: Int = 85,
+    /** Display name the user set for personalized greetings (blank = not set). */
+    val userName: String = "",
     /** Whether the first-launch welcome guide has been shown/dismissed. */
     val onboardingSeen: Boolean = false,
     /** Whether the interactive coach-mark tour has been shown/dismissed. */
@@ -62,6 +64,7 @@ class SettingsRepository @Inject constructor(
         listeningTimeReminder = prefs.getBoolean(KEY_BREAK_REMINDER, true),
         maxVolumeCap = prefs.getBoolean(KEY_VOL_CAP, false),
         maxVolumePercent = prefs.getInt(KEY_VOL_CAP_PCT, 85),
+        userName = prefs.getString(KEY_USER_NAME, "") ?: "",
         onboardingSeen = prefs.getBoolean(KEY_ONBOARDING, false),
         tourSeen = prefs.getBoolean(KEY_TOUR, false)
     )
@@ -88,6 +91,11 @@ class SettingsRepository @Inject constructor(
     fun setHighVolumeWarning(v: Boolean) = put(KEY_VOL_WARN, v) { it.copy(highVolumeWarning = v) }
     fun setListeningTimeReminder(v: Boolean) = put(KEY_BREAK_REMINDER, v) { it.copy(listeningTimeReminder = v) }
     fun setMaxVolumeCap(v: Boolean) = put(KEY_VOL_CAP, v) { it.copy(maxVolumeCap = v) }
+    fun setUserName(name: String) {
+        val trimmed = name.trim().take(24)
+        prefs.edit().putString(KEY_USER_NAME, trimmed).apply()
+        _settings.value = _settings.value.copy(userName = trimmed)
+    }
     fun setOnboardingSeen(v: Boolean) = put(KEY_ONBOARDING, v) { it.copy(onboardingSeen = v) }
     fun setTourSeen(v: Boolean) = put(KEY_TOUR, v) { it.copy(tourSeen = v) }
 
@@ -104,6 +112,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_BREAK_REMINDER = "listening_time_reminder"
         const val KEY_VOL_CAP = "max_volume_cap"
         const val KEY_VOL_CAP_PCT = "max_volume_percent"
+        const val KEY_USER_NAME = "user_name"
         const val KEY_ONBOARDING = "onboarding_seen"
         const val KEY_TOUR = "tour_seen"
     }

@@ -49,6 +49,7 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -75,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaspotify.data.model.Album
 import com.example.kaspotify.data.model.Artist
 import com.example.kaspotify.data.model.Song
+import com.example.kaspotify.ui.Greetings
 import com.example.kaspotify.ui.MusicViewModel
 import com.example.kaspotify.ui.components.Artwork
 import com.example.kaspotify.ui.components.SongRow
@@ -115,6 +117,9 @@ fun LibraryScreen(
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val currentSong by viewModel.currentSong.collectAsStateWithLifecycle()
     val currentId = currentSong?.id
+    val userName by remember { derivedStateOf { viewModel.settings.value.userName } }
+    // A fresh greeting each time Home is entered; re-rolls if the user's name changes.
+    val greeting = remember(userName) { Greetings.random(userName) }
 
     val sortedSongs = remember(songs, sortMode) { sortMode.sort(songs) }
     val sortedFavorites = remember(favorites, sortMode) { sortMode.sort(favorites) }
@@ -129,7 +134,7 @@ fun LibraryScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            HomeWordmark()
+            HomeWordmark(greeting)
             IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.tourTarget(TourTarget.SETTINGS)
@@ -202,7 +207,7 @@ private enum class SortMode(val label: String) {
 }
 
 @Composable
-private fun HomeWordmark() {
+private fun HomeWordmark(greeting: String) {
     Column {
         Text(
             "KASPOTIFY",
@@ -218,6 +223,14 @@ private fun HomeWordmark() {
                 .clip(RoundedCornerShape(2.dp))
                 .background(MaterialTheme.colorScheme.primary)
         )
+        if (greeting.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                greeting,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

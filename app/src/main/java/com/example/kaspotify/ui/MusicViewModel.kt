@@ -95,6 +95,7 @@ class MusicViewModel @Inject constructor(
         settingsRepository.setMaxVolumePercent(percent)
         player.applyVolumeCap()
     }
+    fun setUserName(name: String) = settingsRepository.setUserName(name)
     fun setOnboardingSeen(v: Boolean) = settingsRepository.setOnboardingSeen(v)
     fun setTourSeen(v: Boolean) = settingsRepository.setTourSeen(v)
 
