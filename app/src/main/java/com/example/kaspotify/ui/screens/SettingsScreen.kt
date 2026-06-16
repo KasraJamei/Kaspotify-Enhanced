@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Swipe
+import androidx.compose.material.icons.filled.TipsAndUpdates
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +51,7 @@ import com.example.kaspotify.ui.theme.GlassStroke
 fun SettingsScreen(
     viewModel: MusicViewModel,
     onBack: () -> Unit,
+    onReplayTour: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -128,41 +130,21 @@ fun SettingsScreen(
         )
 
         SectionLabel("Guide")
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    viewModel.setOnboardingSeen(false)
-                    onBack()
-                }
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(GlassFill)
-                    .border(1.dp, GlassStroke, RoundedCornerShape(percent = 50)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.Replay,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
+        GuideRow(
+            icon = Icons.Filled.TipsAndUpdates,
+            title = "Guided tour",
+            subtitle = "Spotlight the key features in the app",
+            onClick = onReplayTour
+        )
+        GuideRow(
+            icon = Icons.Filled.Replay,
+            title = "Welcome carousel",
+            subtitle = "Replay the first-launch intro slides",
+            onClick = {
+                viewModel.setOnboardingSeen(false)
+                onBack()
             }
-            Spacer(Modifier.size(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Show welcome guide again", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Replay the first-launch tour",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        )
 
         SectionLabel("About")
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -180,6 +162,47 @@ fun SettingsScreen(
             )
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun GuideRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(GlassFill)
+                .border(1.dp, GlassStroke, RoundedCornerShape(percent = 50)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.size(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

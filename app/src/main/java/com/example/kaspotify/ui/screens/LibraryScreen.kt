@@ -78,7 +78,9 @@ import com.example.kaspotify.data.model.Song
 import com.example.kaspotify.ui.MusicViewModel
 import com.example.kaspotify.ui.components.Artwork
 import com.example.kaspotify.ui.components.SongRow
+import com.example.kaspotify.ui.components.TourTarget
 import com.example.kaspotify.ui.components.niagaraPage
+import com.example.kaspotify.ui.components.tourTarget
 import com.example.kaspotify.ui.theme.GlassFill
 import com.example.kaspotify.ui.theme.GlassFillStrong
 import com.example.kaspotify.ui.theme.GlassStroke
@@ -128,7 +130,10 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             HomeWordmark()
-            IconButton(onClick = onOpenSettings) {
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.tourTarget(TourTarget.SETTINGS)
+            ) {
                 Icon(
                     Icons.Filled.Settings,
                     contentDescription = "Settings",
@@ -137,14 +142,17 @@ fun LibraryScreen(
             }
         }
 
-        PillTabs(selectedTab) { idx -> scope.launch { pagerState.animateScrollToPage(idx) } }
+        Box(Modifier.fillMaxWidth().tourTarget(TourTarget.TABS)) {
+            PillTabs(selectedTab) { idx -> scope.launch { pagerState.animateScrollToPage(idx) } }
+        }
 
         // Sort/filter applies to the song lists (Songs & Favorites).
         if (selectedTab == 0 || selectedTab == 3) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .tourTarget(TourTarget.SORT),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {

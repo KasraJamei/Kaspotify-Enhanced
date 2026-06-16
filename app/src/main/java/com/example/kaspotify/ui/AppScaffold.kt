@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -38,7 +39,10 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.HeartBroken
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlaylistAdd
@@ -57,6 +61,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,14 +75,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaspotify.data.model.Song
 import com.example.kaspotify.ui.components.GradientBackdrop
+import com.example.kaspotify.ui.components.LocalTour
 import com.example.kaspotify.ui.components.MiniPlayer
+import com.example.kaspotify.ui.components.TourOverlay
+import com.example.kaspotify.ui.components.TourState
+import com.example.kaspotify.ui.components.TourTarget
 import com.example.kaspotify.ui.components.niagaraPage
+import com.example.kaspotify.ui.components.tourTarget
 import com.example.kaspotify.ui.screens.AlbumDetailScreen
 import com.example.kaspotify.ui.screens.ArtistDetailScreen
 import com.example.kaspotify.ui.screens.EffectsScreen
@@ -138,15 +149,29 @@ fun AppScaffold(viewModel: MusicViewModel) {
     val onMore: (Song) -> Unit = { moreSong = it }
     val toastsEnabled = LocalAppSettings.current.inAppToasts
 
+    // Interactive coach-mark tour state (provided to the tree via LocalTour below). It auto-starts
+    // once, right after onboarding is dismissed, and can be replayed from Settings.
+    val tour = remember { TourState() }
+    val onboardingSeen = LocalAppSettings.current.onboardingSeen
+    val tourSeen = LocalAppSettings.current.tourSeen
+    LaunchedEffect(onboardingSeen, tourSeen) {
+        if (onboardingSeen && !tourSeen && !tour.active) {
+            delay(450) // let the first layout settle so target bounds are registered
+            tour.start()
+        }
+    }
+
     // Transient in-app action confirmations — a short, self-dismissing glass toast. Custom (instead
     // of a Snackbar) so we control the duration: a quick ~1.4s flash, not the ~4s Snackbar default.
     var toastText by remember { mutableStateOf("") }
+    var toastKind by remember { mutableStateOf(ToastKind.GENERIC) }
     var toastVisible by remember { mutableStateOf(false) }
     var toastSeq by remember { mutableIntStateOf(0) }
     LaunchedEffect(toastsEnabled) {
         if (!toastsEnabled) { toastVisible = false; return@LaunchedEffect }
-        viewModel.messages.collect { message ->
-            toastText = message
+        viewModel.messages.collect { event ->
+            toastText = event.text
+            toastKind = event.kind
             toastVisible = true
             toastSeq++
         }
@@ -158,6 +183,7 @@ fun AppScaffold(viewModel: MusicViewModel) {
         }
     }
 
+    CompositionLocalProvider(LocalTour provides tour) {
     Box(modifier = Modifier.fillMaxSize()) {
         // Full-bleed gradient backdrop sits behind everything.
         GradientBackdrop {}
@@ -175,7 +201,7 @@ fun AppScaffold(viewModel: MusicViewModel) {
                 ) {
                     currentSong?.let { song ->
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            Box(Modifier.widthIn(max = 640.dp)) {
+                            Box(Modifier.widthIn(max = 640.dp).tourTarget(TourTarget.MINIPLAYER)) {
                                 DockedMiniPlayer(
                                     viewModel = viewModel,
                                     song = song,
@@ -186,7 +212,7 @@ fun AppScaffold(viewModel: MusicViewModel) {
                         Spacer(Modifier.height(8.dp))
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Box(Modifier.widthIn(max = 640.dp)) {
+                        Box(Modifier.widthIn(max = 640.dp).tourTarget(TourTarget.NAV)) {
                             FloatingNavBar(
                                 selected = selectedTab,
                                 onSelect = { tab -> scope.launch { pagerState.animateScrollToPage(tab.ordinal) } }
@@ -328,7 +354,15 @@ fun AppScaffold(viewModel: MusicViewModel) {
 
         AnimatedVisibility(visible = showSettings, enter = overlayEnter, exit = overlayExit) {
             BackHandler(enabled = showSettings) { showSettings = false }
-            SettingsScreen(viewModel = viewModel, onBack = { showSettings = false })
+            SettingsScreen(
+                viewModel = viewModel,
+                onBack = { showSettings = false },
+                onReplayTour = {
+                    showSettings = false
+                    scope.launch { pagerState.animateScrollToPage(0) }
+                    tour.start()
+                }
+            )
         }
 
         // Toast lives at the very top of the stack so confirmations are visible even when the
@@ -342,7 +376,14 @@ fun AppScaffold(viewModel: MusicViewModel) {
                 .navigationBarsPadding()
                 .padding(bottom = 90.dp)
         ) {
-            GlassSnackbar(toastText)
+            GlassSnackbar(toastText, toastKind, toastSeq)
+        }
+
+        // Coach-mark tour sits above the app chrome. It never runs at the same time as onboarding,
+        // which is drawn last (on top). Tapping the dim area or Skip/Done dismisses it.
+        TourOverlay(tour) {
+            viewModel.setTourSeen(true)
+            tour.stop()
         }
 
         // First-launch welcome guide sits above everything until dismissed.
@@ -353,6 +394,7 @@ fun AppScaffold(viewModel: MusicViewModel) {
         ) {
             OnboardingScreen(onFinish = { viewModel.setOnboardingSeen(true) })
         }
+    }
     }
 
     moreSong?.let { song ->
@@ -382,11 +424,28 @@ private fun DockedMiniPlayer(viewModel: MusicViewModel, song: Song, onClick: () 
 }
 
 @Composable
-private fun GlassSnackbar(message: String) {
+private fun GlassSnackbar(message: String, kind: ToastKind, seq: Int) {
     val shape = RoundedCornerShape(16.dp)
-    // A small confirmation pill, centered and only as wide as its content so it reads as a
-    // distinct notification rather than a full-width bar. A primary-tinted check makes the
-    // "done" meaning obvious at a glance.
+    // A small confirmation pill, centered and only as wide as its content so it reads as a distinct
+    // notification rather than a full-width bar. The icon changes per action and pops on each new
+    // toast so it always feels alive.
+    val icon = when (kind) {
+        ToastKind.QUEUE -> Icons.Filled.QueueMusic
+        ToastKind.PLAY_NEXT -> Icons.Filled.QueuePlayNext
+        ToastKind.LIKE -> Icons.Filled.Favorite
+        ToastKind.UNLIKE -> Icons.Filled.HeartBroken
+        ToastKind.PLAYLIST -> Icons.Filled.PlaylistAdd
+        ToastKind.TIMER -> Icons.Filled.Bedtime
+        ToastKind.GENERIC -> Icons.Filled.Check
+    }
+    val pop = remember { Animatable(0.5f) }
+    LaunchedEffect(seq) {
+        pop.snapTo(0.5f)
+        pop.animateTo(
+            1f,
+            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+        )
+    }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Row(
             modifier = Modifier
@@ -400,12 +459,13 @@ private fun GlassSnackbar(message: String) {
             Box(
                 modifier = Modifier
                     .size(24.dp)
+                    .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
                     .clip(RoundedCornerShape(percent = 50))
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Filled.Check,
+                    icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(15.dp)

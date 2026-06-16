@@ -32,6 +32,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Categorizes an in-app toast so the UI can show a matching icon. */
+enum class ToastKind { GENERIC, QUEUE, PLAY_NEXT, LIKE, UNLIKE, PLAYLIST, TIMER }
+
+/** A transient in-app confirmation: its text plus a [ToastKind] that selects the icon. */
+data class ToastEvent(val text: String, val kind: ToastKind = ToastKind.GENERIC)
+
 @HiltViewModel
 class MusicViewModel @Inject constructor(
     private val repository: MusicRepository,
@@ -52,6 +58,7 @@ class MusicViewModel @Inject constructor(
     fun setAudioEffects(v: Boolean) = settingsRepository.setAudioEffects(v)
     fun setVisualizerAvailable(v: Boolean) = settingsRepository.setVisualizer(v)
     fun setOnboardingSeen(v: Boolean) = settingsRepository.setOnboardingSeen(v)
+    fun setTourSeen(v: Boolean) = settingsRepository.setTourSeen(v)
 
     fun songsForAlbum(albumId: Long): List<Song> =
         songs.value.filter { it.albumId == albumId }
@@ -68,10 +75,12 @@ class MusicViewModel @Inject constructor(
     val recentlyAdded: StateFlow<List<Song>> = repository.recentlyAdded.asState(emptyList())
     val playlists: StateFlow<List<Playlist>> = repository.playlists.asState(emptyList())
 
-    /** One-shot, user-facing action confirmations shown as a transient in-app snackbar. */
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val messages: SharedFlow<String> = _messages.asSharedFlow()
-    private fun notify(message: String) { _messages.tryEmit(message) }
+    /** One-shot, user-facing action confirmations shown as a transient in-app toast. */
+    private val _messages = MutableSharedFlow<ToastEvent>(extraBufferCapacity = 4)
+    val messages: SharedFlow<ToastEvent> = _messages.asSharedFlow()
+    private fun notify(message: String, kind: ToastKind = ToastKind.GENERIC) {
+        _messages.tryEmit(ToastEvent(message, kind))
+    }
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -140,17 +149,20 @@ class MusicViewModel @Inject constructor(
     fun cycleRepeat() = player.cycleRepeat()
     fun playNext(song: Song) {
         player.playNext(song)
-        notify("Playing next: ${song.title}")
+        notify("Playing next: ${song.title}", ToastKind.PLAY_NEXT)
     }
 
     fun addToQueue(song: Song) {
         player.addToQueueEnd(song)
-        notify("Added to queue: ${song.title}")
+        notify("Added to queue: ${song.title}", ToastKind.QUEUE)
     }
 
     fun setSleepTimer(minutes: Int?) {
         player.setSleepTimer(minutes)
-        notify(if (minutes != null) "Sleep timer set for $minutes min" else "Sleep timer off")
+        notify(
+            if (minutes != null) "Sleep timer set for $minutes min" else "Sleep timer off",
+            ToastKind.TIMER
+        )
     }
     fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)
     fun removeQueueItem(index: Int) = player.removeQueueItem(index)
@@ -176,14 +188,16 @@ class MusicViewModel @Inject constructor(
 
     fun toggleFavorite(song: Song) = viewModelScope.launch {
         repository.toggleFavorite(song)
-        notify(if (song.isFavorite) "Removed from Liked" else "Added to Liked")
+        if (song.isFavorite) notify("Removed from Liked", ToastKind.UNLIKE)
+        else notify("Added to Liked", ToastKind.LIKE)
     }
 
     /** Sets an explicit like state (idempotent). Used by double-tap, which flips an optimistic UI
      *  flag and tells us the exact target — avoiding stale-read toggles that jump randomly. */
     fun setFavorite(song: Song, favorite: Boolean) = viewModelScope.launch {
         repository.setFavorite(song.id, favorite)
-        notify(if (favorite) "Added to Liked" else "Removed from Liked")
+        if (favorite) notify("Added to Liked", ToastKind.LIKE)
+        else notify("Removed from Liked", ToastKind.UNLIKE)
     }
 
     fun onSearchQueryChange(query: String) {
@@ -198,30 +212,30 @@ class MusicViewModel @Inject constructor(
     fun createSmartPlaylist(name: String, songs: List<Song>) =
         viewModelScope.launch {
             repository.createPlaylistWith(name, songs)
-            notify("Created \"$name\" with ${songs.size} songs")
+            notify("Created \"$name\" with ${songs.size} songs", ToastKind.PLAYLIST)
         }
 
     // ---- Playlist actions ----
 
     fun createPlaylist(name: String) = viewModelScope.launch {
         repository.createPlaylist(name)
-        notify("Playlist created")
+        notify("Playlist created", ToastKind.PLAYLIST)
     }
     fun renamePlaylist(id: Long, name: String) =
         viewModelScope.launch { repository.renamePlaylist(id, name) }
     fun deletePlaylist(id: Long) = viewModelScope.launch {
         repository.deletePlaylist(id)
-        notify("Playlist deleted")
+        notify("Playlist deleted", ToastKind.PLAYLIST)
     }
     fun addToPlaylist(playlistId: Long, song: Song) =
         viewModelScope.launch {
             repository.addToPlaylist(playlistId, song)
-            notify("Added to playlist")
+            notify("Added to playlist", ToastKind.PLAYLIST)
         }
     fun removeFromPlaylist(playlistId: Long, song: Song) =
         viewModelScope.launch {
             repository.removeFromPlaylist(playlistId, song)
-            notify("Removed from playlist")
+            notify("Removed from playlist", ToastKind.PLAYLIST)
         }
 
     private fun <T> Flow<T>.asState(initial: T): StateFlow<T> =
