@@ -103,6 +103,7 @@ import com.example.kaspotify.ui.screens.PlaylistsScreen
 import com.example.kaspotify.ui.screens.QualityScreen
 import com.example.kaspotify.ui.screens.QueueScreen
 import com.example.kaspotify.ui.screens.SearchScreen
+import com.example.kaspotify.ui.screens.GenreScreen
 import com.example.kaspotify.ui.screens.PatchNotesScreen
 import com.example.kaspotify.ui.screens.SettingsScreen
 import com.example.kaspotify.playback.SafetyEvent
@@ -145,6 +146,7 @@ fun AppScaffold(viewModel: MusicViewModel) {
     var showQuality by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showPatchNotes by remember { mutableStateOf(false) }
+    var showGenres by remember { mutableStateOf(false) }
     var moreSong by remember { mutableStateOf<Song?>(null) }
 
     // Only currentSong is read here (changes once per track). isPlaying/position/duration are
@@ -373,13 +375,19 @@ fun AppScaffold(viewModel: MusicViewModel) {
                     scope.launch { pagerState.animateScrollToPage(0) }
                     tour.start()
                 },
-                onOpenPatchNotes = { showPatchNotes = true }
+                onOpenPatchNotes = { showPatchNotes = true },
+                onOpenGenres = { showGenres = true }
             )
         }
 
         AnimatedVisibility(visible = showPatchNotes, enter = overlayEnter, exit = overlayExit) {
             BackHandler(enabled = showPatchNotes) { showPatchNotes = false }
             PatchNotesScreen(viewModel = viewModel, onBack = { showPatchNotes = false })
+        }
+
+        AnimatedVisibility(visible = showGenres, enter = overlayEnter, exit = overlayExit) {
+            BackHandler(enabled = showGenres) { showGenres = false }
+            GenreScreen(viewModel = viewModel, onBack = { showGenres = false })
         }
 
         // Toast lives at the very top of the stack so confirmations are visible even when the

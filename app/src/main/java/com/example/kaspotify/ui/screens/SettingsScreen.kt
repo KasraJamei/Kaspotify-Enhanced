@@ -1,5 +1,11 @@
 package com.example.kaspotify.ui.screens
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -56,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -72,12 +79,13 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onReplayTour: () -> Unit,
     onOpenPatchNotes: () -> Unit,
+    onOpenGenres: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
-    val genreBuilding by viewModel.genreBuilding.collectAsStateWithLifecycle()
-    val genreProgress by viewModel.genreProgress.collectAsStateWithLifecycle()
+    val genreScan by viewModel.genreScan.collectAsStateWithLifecycle()
+    val genreEstimate by viewModel.genreEstimateSeconds.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val version = remember {
         runCatching {
@@ -221,23 +229,24 @@ fun SettingsScreen(
             onChange = viewModel::setInAppToasts
         )
 
-        SectionLabel("Library")
-        GuideRow(
-            icon = Icons.Filled.AutoAwesome,
-            title = "Group songs by genre",
-            subtitle = if (genreBuilding) "Finding genres… ${(genreProgress * 100).toInt()}%"
-            else "Scan your library and build a playlist per genre",
-            onClick = { if (!genreBuilding) viewModel.buildGenrePlaylists() }
+        SectionLabel("Experimental")
+        Text(
+            "Features still in the works — they may change or be rough around the edges.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp)
         )
-        if (genreBuilding) {
-            LinearProgressIndicator(
-                progress = { genreProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
-                color = MaterialTheme.colorScheme.primary
-            )
+        val genreSubtitle = when {
+            genreScan.running -> "Analyzing ${genreScan.done} of ${genreScan.total}…"
+            genreEstimate > 0 -> "Build a playlist per genre • ${formatEstimate(genreEstimate)} to analyze"
+            else -> "Build a playlist per genre from your library"
         }
+        ExperimentalRow(
+            title = "Group songs by genre",
+            subtitle = genreSubtitle,
+            running = genreScan.running,
+            onClick = onOpenGenres
+        )
 
         SectionLabel("Updates")
         val update = updateState
@@ -347,6 +356,86 @@ private fun GuideRow(
             )
         }
     }
+}
+
+/** A row for in-development features: an animated sparkle icon + a "BETA" tag to set expectations. */
+@Composable
+private fun ExperimentalRow(
+    title: String,
+    subtitle: String,
+    running: Boolean,
+    onClick: () -> Unit
+) {
+    val transition = rememberInfiniteTransition(label = "labs")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(6000, easing = LinearEasing), RepeatMode.Restart),
+        label = "labsRot"
+    )
+    val pulse by transition.animateFloat(
+        initialValue = if (running) 0.85f else 0.9f,
+        targetValue = if (running) 1.18f else 1.08f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "labsPulse"
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), RoundedCornerShape(percent = 50)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Filled.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer { rotationZ = rotation; scaleX = pulse; scaleY = pulse }
+            )
+        }
+        Spacer(Modifier.size(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.size(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        "BETA",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun formatEstimate(seconds: Int): String {
+    if (seconds < 60) return "~${seconds}s"
+    val m = seconds / 60
+    val s = seconds % 60
+    return if (s == 0) "~${m}m" else "~${m}m ${s}s"
 }
 
 @Composable

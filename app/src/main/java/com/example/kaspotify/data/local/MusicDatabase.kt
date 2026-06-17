@@ -10,9 +10,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SongStateEntity::class,
         PlaylistEntity::class,
         PlaylistSongCrossRef::class,
-        SearchHistoryEntity::class
+        SearchHistoryEntity::class,
+        SongGenreEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -34,6 +35,17 @@ abstract class MusicDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE song_state ADD COLUMN weeklyPlayCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE song_state ADD COLUMN weekStartAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** v3 -> v4: add the app's own song_genre metadata table. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `song_genre` " +
+                        "(`songId` INTEGER NOT NULL, `genre` TEXT, `source` TEXT NOT NULL, " +
+                        "`checkedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`))"
+                )
             }
         }
     }

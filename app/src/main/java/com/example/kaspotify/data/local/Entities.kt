@@ -48,3 +48,16 @@ data class SearchHistoryEntity(
     @PrimaryKey val query: String,
     val lastUsedAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * The app's own genre metadata for a song, kept separate from the file's tags (we never write to
+ * the audio file). [genre] null means the song was analyzed but no genre could be found. [source]
+ * is one of "tag" / "online" / "manual".
+ */
+@Entity(tableName = "song_genre")
+data class SongGenreEntity(
+    @PrimaryKey val songId: Long,
+    val genre: String?,
+    val source: String,
+    val checkedAt: Long = System.currentTimeMillis()
+)

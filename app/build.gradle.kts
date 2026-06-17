@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.kaspotify"
         minSdk = 24
         targetSdk = 34
-        versionCode = 23
-        versionName = "1.8.1"
+        versionCode = 24
+        versionName = "1.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

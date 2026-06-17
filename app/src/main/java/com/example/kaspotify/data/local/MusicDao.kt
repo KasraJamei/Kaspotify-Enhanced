@@ -74,6 +74,23 @@ interface MusicDao {
     )
     fun playlistsWithCounts(): Flow<List<PlaylistWithCount>>
 
+    // ---- Genre metadata (the app's own per-song genre store) ----
+
+    @Upsert
+    suspend fun upsertGenre(entry: SongGenreEntity)
+
+    @Query("SELECT * FROM song_genre")
+    fun genres(): Flow<List<SongGenreEntity>>
+
+    @Query("SELECT * FROM song_genre")
+    suspend fun genresOnce(): List<SongGenreEntity>
+
+    @Query("DELETE FROM song_genre WHERE songId = :songId")
+    suspend fun deleteGenre(songId: Long)
+
+    @Query("DELETE FROM song_genre")
+    suspend fun clearGenres()
+
     // ---- Search history ----
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

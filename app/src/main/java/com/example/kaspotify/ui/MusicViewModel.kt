@@ -59,6 +59,23 @@ sealed interface PatchNotesState {
     data class Error(val message: String) : PatchNotesState
 }
 
+/** Live progress of the genre analysis scan. */
+data class GenreScanState(
+    val running: Boolean = false,
+    val done: Int = 0,
+    val total: Int = 0,
+    val currentTitle: String = "",
+    val currentGenre: String? = null
+)
+
+/** A song joined with its app-stored genre, for the in-app genre browser/editor. */
+data class GenreEntry(
+    val song: Song,
+    val genre: String?,
+    val source: String?,
+    val analyzed: Boolean
+)
+
 @HiltViewModel
 class MusicViewModel @Inject constructor(
     private val repository: MusicRepository,
@@ -212,28 +229,64 @@ class MusicViewModel @Inject constructor(
         }
     }
 
-    // ---- Genre auto-playlists ("AI" grouping) ----
+    // ---- Genre metadata system ("AI" grouping) ----
 
-    private val _genreBuilding = MutableStateFlow(false)
-    val genreBuilding: StateFlow<Boolean> = _genreBuilding.asStateFlow()
+    private val _genreScan = MutableStateFlow(GenreScanState())
+    val genreScan: StateFlow<GenreScanState> = _genreScan.asStateFlow()
 
-    private val _genreProgress = MutableStateFlow(0f)
-    val genreProgress: StateFlow<Float> = _genreProgress.asStateFlow()
+    /** Per-song genre rows joined with the song, for the in-app genre browser/editor. */
+    val genreEntries: StateFlow<List<GenreEntry>> =
+        combine(repository.songs, repository.genreMetadata) { songs, meta ->
+            val byId = meta.associateBy { it.songId }
+            songs.map { song ->
+                val m = byId[song.id]
+                GenreEntry(song = song, genre = m?.genre, source = m?.source, analyzed = m != null)
+            }.sortedBy { it.song.title.lowercase() }
+        }.asState(emptyList())
 
-    fun buildGenrePlaylists() = viewModelScope.launch {
-        if (_genreBuilding.value) return@launch
-        _genreBuilding.value = true
-        _genreProgress.value = 0f
-        val count = runCatching {
-            repository.buildGenrePlaylists { done, total ->
-                _genreProgress.value = if (total > 0) done.toFloat() / total else 1f
+    /** Distinct found genres with their counts, for the summary list. */
+    val genreSummary: StateFlow<List<Pair<String, Int>>> =
+        repository.genreMetadata.map { rows ->
+            rows.mapNotNull { it.genre }
+                .groupingBy { it }.eachCount()
+                .entries.sortedByDescending { it.value }
+                .map { it.key to it.value }
+        }.asState(emptyList())
+
+    /** Estimated seconds remaining to analyze the not-yet-known songs (~0.6s each). */
+    val genreEstimateSeconds: StateFlow<Int> =
+        combine(repository.songs, repository.genreMetadata) { songs, meta ->
+            (repository.pendingGenreCount(songs.size, meta.size) * 0.6f).toInt()
+        }.asState(0)
+
+    /** Analyze the library (resumable, live preview) then (re)build the per-genre playlists. */
+    fun analyzeAndBuildGenres() = viewModelScope.launch {
+        if (_genreScan.value.running) return@launch
+        _genreScan.value = GenreScanState(running = true)
+        runCatching {
+            repository.analyzeGenres { done, total, title, found ->
+                _genreScan.value = GenreScanState(
+                    running = true, done = done, total = total,
+                    currentTitle = title, currentGenre = found
+                )
             }
-        }.getOrDefault(0)
-        _genreBuilding.value = false
+        }
+        val count = runCatching { repository.createGenrePlaylists() }.getOrDefault(0)
+        _genreScan.value = GenreScanState(running = false)
         notify(
             if (count > 0) "Created $count genre playlist${if (count == 1) "" else "s"}"
-            else "No genres found to group"
+            else "Analysis done — not enough songs per genre yet"
         )
+    }
+
+    fun setSongGenre(songId: Long, genre: String) =
+        viewModelScope.launch { repository.setManualGenre(songId, genre) }
+
+    fun resetSongGenre(songId: Long) = viewModelScope.launch { repository.resetGenre(songId) }
+
+    fun resetAllGenres() = viewModelScope.launch {
+        repository.resetAllGenres()
+        notify("Genre metadata reset")
     }
 
     fun refreshLibrary() = viewModelScope.launch { repository.refreshLibrary() }
