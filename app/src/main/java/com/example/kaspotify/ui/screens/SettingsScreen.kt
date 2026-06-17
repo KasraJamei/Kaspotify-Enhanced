@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Hearing
@@ -65,9 +66,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kaspotify.R
 import com.example.kaspotify.ui.MusicViewModel
 import com.example.kaspotify.ui.UpdateState
 import com.example.kaspotify.ui.theme.GlassFill
@@ -109,11 +112,11 @@ fun SettingsScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
-            Text("Settings", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
         }
 
         var showNameDialog by remember { mutableStateOf(false) }
-        SectionLabel("Profile")
+        SectionLabel(stringResource(R.string.sec_profile))
         GuideRow(
             icon = Icons.Filled.Person,
             title = settings.userName.ifBlank { "Set your name" },
@@ -129,7 +132,7 @@ fun SettingsScreen(
             )
         }
 
-        SectionLabel("Appearance")
+        SectionLabel(stringResource(R.string.sec_appearance))
         SettingToggle(
             icon = Icons.Filled.Palette,
             title = "Album-art theming",
@@ -145,7 +148,25 @@ fun SettingsScreen(
             onChange = viewModel::setHighRefreshRate
         )
 
-        SectionLabel("Playback & audio")
+        SectionLabel(stringResource(R.string.sec_language))
+        val activity = context as? android.app.Activity
+        LanguageOption(
+            title = stringResource(R.string.lang_system),
+            selected = settings.language == "system",
+            onClick = { viewModel.setLanguage("system"); activity?.recreate() }
+        )
+        LanguageOption(
+            title = stringResource(R.string.lang_english),
+            selected = settings.language == "en",
+            onClick = { viewModel.setLanguage("en"); activity?.recreate() }
+        )
+        LanguageOption(
+            title = stringResource(R.string.lang_farsi),
+            selected = settings.language == "fa",
+            onClick = { viewModel.setLanguage("fa"); activity?.recreate() }
+        )
+
+        SectionLabel(stringResource(R.string.sec_playback))
         SettingToggle(
             icon = Icons.Filled.GraphicEq,
             title = "Audio visualizer",
@@ -176,7 +197,7 @@ fun SettingsScreen(
             onChange = viewModel::setShowQualityBadges
         )
 
-        SectionLabel("Hearing safety")
+        SectionLabel(stringResource(R.string.sec_hearing))
         SettingToggle(
             icon = Icons.Filled.Warning,
             title = "High-volume warning",
@@ -213,7 +234,7 @@ fun SettingsScreen(
             }
         }
 
-        SectionLabel("Interaction")
+        SectionLabel(stringResource(R.string.sec_interaction))
         SettingToggle(
             icon = Icons.Filled.Swipe,
             title = "Swipe gestures on lists",
@@ -229,7 +250,7 @@ fun SettingsScreen(
             onChange = viewModel::setInAppToasts
         )
 
-        SectionLabel("Experimental")
+        SectionLabel(stringResource(R.string.sec_experimental))
         Text(
             "Features still in the works — they may change or be rough around the edges.",
             style = MaterialTheme.typography.bodySmall,
@@ -248,7 +269,7 @@ fun SettingsScreen(
             onClick = onOpenGenres
         )
 
-        SectionLabel("Updates")
+        SectionLabel(stringResource(R.string.sec_updates))
         val update = updateState
         val statusLine = when (update) {
             is UpdateState.Checking -> "Checking…"
@@ -281,7 +302,7 @@ fun SettingsScreen(
             onClick = onOpenPatchNotes
         )
 
-        SectionLabel("Guide")
+        SectionLabel(stringResource(R.string.sec_guide))
         GuideRow(
             icon = Icons.Filled.TipsAndUpdates,
             title = "Guided tour",
@@ -298,7 +319,7 @@ fun SettingsScreen(
             }
         )
 
-        SectionLabel("About")
+        SectionLabel(stringResource(R.string.sec_about))
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text("Kaspotify", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
@@ -455,6 +476,26 @@ private fun NameDialog(current: String, onConfirm: (String) -> Unit, onDismiss: 
         confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+@Composable
+private fun LanguageOption(title: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        if (selected) {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
 }
 
 @Composable

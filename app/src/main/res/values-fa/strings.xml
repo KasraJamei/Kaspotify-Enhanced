@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">Kaspotify</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">خانه</string>
+    <string name="nav_search">جستجو</string>
+    <string name="nav_playlists">پلی‌لیست‌ها</string>
+
+    <!-- Settings -->
+    <string name="settings_title">تنظیمات</string>
+    <string name="sec_profile">پروفایل</string>
+    <string name="sec_appearance">ظاهر</string>
+    <string name="sec_playback">پخش و صدا</string>
+    <string name="sec_hearing">ایمنی شنوایی</string>
+    <string name="sec_interaction">تعامل</string>
+    <string name="sec_experimental">آزمایشی</string>
+    <string name="sec_updates">به‌روزرسانی‌ها</string>
+    <string name="sec_guide">راهنما</string>
+    <string name="sec_about">درباره</string>
+    <string name="sec_language">زبان</string>
+
+    <string name="settings_language_title">زبان برنامه</string>
+    <string name="settings_language_subtitle">زبان خود را انتخاب کنید</string>
+    <string name="lang_system">پیش‌فرض سیستم</string>
+    <string name="lang_english">English</string>
+    <string name="lang_farsi">فارسی</string>
+</resources>

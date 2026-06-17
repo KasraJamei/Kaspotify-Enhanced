@@ -1,6 +1,7 @@
 package com.example.kaspotify.ui
 
 import android.content.Intent
+import com.example.kaspotify.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -113,10 +114,10 @@ import com.example.kaspotify.ui.theme.GlassFill
 import com.example.kaspotify.ui.theme.GlassFillStrong
 import com.example.kaspotify.ui.theme.GlassStroke
 
-private enum class Tab(val label: String, val icon: ImageVector) {
-    LIBRARY("Home", Icons.Filled.Home),
-    SEARCH("Search", Icons.Filled.Search),
-    PLAYLISTS("Playlists", Icons.Filled.PlaylistPlay)
+private enum class Tab(val labelRes: Int, val icon: ImageVector) {
+    LIBRARY(R.string.nav_home, Icons.Filled.Home),
+    SEARCH(R.string.nav_search, Icons.Filled.Search),
+    PLAYLISTS(R.string.nav_playlists, Icons.Filled.PlaylistPlay)
 }
 
 private val overlayEnter = slideInVertically(
@@ -575,15 +576,16 @@ private fun NavItem(tab: Tab, selected: Boolean, onClick: () -> Unit, modifier: 
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val label = androidx.compose.ui.res.stringResource(tab.labelRes)
         Icon(
             tab.icon,
-            contentDescription = tab.label,
+            contentDescription = label,
             tint = contentColor,
             modifier = Modifier.size(22.dp)
         )
         if (selected) {
             Spacer(Modifier.size(8.dp))
-            Text(tab.label, style = MaterialTheme.typography.labelLarge, color = contentColor)
+            Text(label, style = MaterialTheme.typography.labelLarge, color = contentColor)
         }
     }
 }
