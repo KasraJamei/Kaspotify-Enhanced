@@ -80,8 +80,15 @@ class MusicRepository @Inject constructor(
         songs.map { list -> list.sortedByDescending { it.dateAddedSec }.take(MAX_SMART_PLAYLIST_SIZE) }
 
     val playlists: Flow<List<Playlist>> =
-        dao.playlistsWithCounts().map { rows ->
-            rows.map { Playlist(id = it.id, name = it.name, songCount = it.songCount) }
+        combine(dao.playlistsWithCounts(), songs, dao.allPlaylistSongRefs()) { rows, allSongs, refs ->
+            val byId = allSongs.associateBy { it.id }
+            val refsByPlaylist = refs.groupBy { it.playlistId }
+            rows.map { row ->
+                val covers = refsByPlaylist[row.id].orEmpty()
+                    .mapNotNull { byId[it.songId]?.artworkUri }
+                    .take(4)
+                Playlist(id = row.id, name = row.name, songCount = row.songCount, coverUris = covers)
+            }
         }
 
     suspend fun refreshLibrary() {

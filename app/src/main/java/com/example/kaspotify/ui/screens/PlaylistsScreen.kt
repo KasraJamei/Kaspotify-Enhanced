@@ -47,6 +47,8 @@ import com.example.kaspotify.data.model.Playlist
 import com.example.kaspotify.data.model.QualityTier
 import com.example.kaspotify.data.model.Song
 import com.example.kaspotify.ui.MusicViewModel
+import com.example.kaspotify.ui.components.Artwork
+import androidx.compose.ui.draw.clip
 
 @Composable
 fun PlaylistsScreen(
@@ -122,19 +124,7 @@ fun PlaylistsScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Filled.QueueMusic,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                        PlaylistCover(playlist.coverUris)
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(playlist.name, style = MaterialTheme.typography.titleMedium)
@@ -187,6 +177,42 @@ fun PlaylistsScreen(
                 TextButton(onClick = { playlistToDelete = null }) { Text("Cancel") }
             }
         )
+    }
+}
+
+/** A 2×2 grid of the playlist's first four song artworks (falls back to a music-note tile). */
+@Composable
+private fun PlaylistCover(covers: List<android.net.Uri>) {
+    val shape = RoundedCornerShape(8.dp)
+    if (covers.isEmpty()) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = shape,
+            modifier = Modifier.size(48.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Filled.QueueMusic,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        return
+    }
+    Column(modifier = Modifier.size(48.dp).clip(shape)) {
+        Row {
+            Artwork(uri = covers.getOrNull(0), size = 24.dp, cornerRadius = 0.dp)
+            Artwork(uri = covers.getOrNull(1) ?: covers[0], size = 24.dp, cornerRadius = 0.dp)
+        }
+        Row {
+            Artwork(uri = covers.getOrNull(2) ?: covers[0], size = 24.dp, cornerRadius = 0.dp)
+            Artwork(
+                uri = covers.getOrNull(3) ?: covers.getOrNull(1) ?: covers[0],
+                size = 24.dp,
+                cornerRadius = 0.dp
+            )
+        }
     }
 }
 

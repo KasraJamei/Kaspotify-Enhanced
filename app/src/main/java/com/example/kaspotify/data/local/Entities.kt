@@ -42,6 +42,12 @@ data class PlaylistWithCount(
     val songCount: Int
 )
 
+/** Lightweight playlist→song link used to build cover grids. */
+data class PlaylistSongLite(
+    val playlistId: Long,
+    val songId: Long
+)
+
 /** A past search term, kept for the search history list. */
 @Entity(tableName = "search_history")
 data class SearchHistoryEntity(

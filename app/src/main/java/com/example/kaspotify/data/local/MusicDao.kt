@@ -64,6 +64,10 @@ interface MusicDao {
     @Query("SELECT songId FROM playlist_songs WHERE playlistId = :playlistId ORDER BY position ASC")
     fun playlistSongIds(playlistId: Long): Flow<List<Long>>
 
+    /** All playlist→song links, position-ordered, for building cover grids. */
+    @Query("SELECT playlistId, songId FROM playlist_songs ORDER BY position ASC")
+    fun allPlaylistSongRefs(): Flow<List<PlaylistSongLite>>
+
     @Query(
         """
         SELECT p.id AS id, p.name AS name,

@@ -98,5 +98,7 @@ data class Artist(
 data class Playlist(
     val id: Long,
     val name: String,
-    val songCount: Int
+    val songCount: Int,
+    /** Artwork of the first few songs, used to render a 2×2 cover grid. */
+    val coverUris: List<Uri> = emptyList()
 )
